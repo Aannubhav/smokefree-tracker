@@ -28,7 +28,7 @@ jobs:
         run: npm install
 
       - name: Link EAS project
-        run: eas init --id c52a29d8-7e98-44b6-99f7-6115ca667f94 --non-interactive
+        run: eas init --id c52a29d8-7e98-44b6-99f7-6115ca667f94 --non-interactive --force
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
 
