@@ -23,6 +23,12 @@
       "favicon": "./assets/favicon.png",
       "bundler": "metro"
     },
-    "scheme": "smokingtracker"
+    "scheme": "smokingtracker",
+    "owner": "anubhav31",
+    "extra": {
+      "eas": {
+        "projectId": "c52a29d8-7e98-44b6-99f7-6115ca667f94"
+      }
+    }
   }
 }
