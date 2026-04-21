@@ -56,6 +56,27 @@ const MainTabs = () => {
   );
 };
 
+// Mobile-first shell: centers content in a 480px card on wide screens
+function MobileShell({ children, colors }) {
+  return (
+    <View style={{ flex: 1, backgroundColor: '#E8E8E8', alignItems: 'center', justifyContent: 'center' }}>
+      <View style={{
+        width: '100%',
+        maxWidth: 480,
+        flex: 1,
+        backgroundColor: colors.background,
+        overflow: 'hidden',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0.15,
+        shadowRadius: 24,
+      }}>
+        {children}
+      </View>
+    </View>
+  );
+}
+
 export default function AppNavigator() {
   const { user, loading } = useAuth();
   const { colors } = useTheme();
@@ -63,18 +84,28 @@ export default function AppNavigator() {
 
   if (loading) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background }}>
-        <ActivityIndicator size="large" color={colors.primary} />
-      </View>
+      <MobileShell colors={colors}>
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          <ActivityIndicator size="large" color={colors.primary} />
+        </View>
+      </MobileShell>
     );
   }
 
   if (!user) {
     const nav = { navigate: (s) => setScreen(s) };
-    return screen === 'Login'
-      ? <LoginScreen navigation={nav} />
-      : <RegisterScreen navigation={nav} />;
+    return (
+      <MobileShell colors={colors}>
+        {screen === 'Login'
+          ? <LoginScreen navigation={nav} />
+          : <RegisterScreen navigation={nav} />}
+      </MobileShell>
+    );
   }
 
-  return <MainTabs />;
+  return (
+    <MobileShell colors={colors}>
+      <MainTabs />
+    </MobileShell>
+  );
 }

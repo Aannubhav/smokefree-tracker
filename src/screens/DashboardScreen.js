@@ -1,20 +1,10 @@
 import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import {
-  View,
-  Text,
-  ScrollView,
-  TouchableOpacity,
-  StyleSheet,
-  Modal,
-  TextInput,
-  ActivityIndicator,
-  RefreshControl,
-  Alert,
-  Platform,
+  View, Text, ScrollView, TouchableOpacity,
+  StyleSheet, TextInput, ActivityIndicator,
+  RefreshControl, Alert, Platform,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import { format, formatDistanceToNow } from 'date-fns';
 import { useFocusEffect } from '@react-navigation/native';
 
@@ -22,12 +12,8 @@ import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { spacing, radius, fontSize } from '../theme';
 import {
-  logSmoke,
-  logUrge,
-  deleteSmoke,
-  getTodaySmokes,
-  getTodaySummary,
-  getSettings,
+  logSmoke, logUrge, deleteSmoke,
+  getTodaySmokes, getTodaySummary, getSettings,
 } from '../services/smokingService';
 
 const TRIGGERS = ['Stress', 'Boredom', 'After eating', 'Coffee', 'Social', 'Anxiety', 'Habit', 'Other'];
@@ -35,7 +21,6 @@ const TRIGGERS = ['Stress', 'Boredom', 'After eating', 'Coffee', 'Social', 'Anxi
 export default function DashboardScreen() {
   const { user } = useAuth();
   const { colors } = useTheme();
-  const styles = useMemo(() => createStyles(colors), [colors]);
 
   const [summary, setSummary] = useState({ count: 0, totalExpense: 0 });
   const [smokes, setSmokes] = useState([]);
@@ -43,8 +28,8 @@ export default function DashboardScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [logging, setLogging] = useState(false);
-  const [modalVisible, setModalVisible] = useState(false);
-  const [modalType, setModalType] = useState('smoke'); // 'smoke' | 'urge'
+  const [formVisible, setFormVisible] = useState(false);
+  const [formType, setFormType] = useState('smoke');
   const [note, setNote] = useState('');
   const [trigger, setTrigger] = useState('');
   const [timeSinceLast, setTimeSinceLast] = useState('');
@@ -69,17 +54,10 @@ export default function DashboardScreen() {
     }
   }, [user.uid]);
 
-  useFocusEffect(
-    useCallback(() => {
-      load();
-    }, [load])
-  );
+  useFocusEffect(useCallback(() => { load(); }, [load]));
 
   const updateTimeSince = (list) => {
-    if (!list || list.length === 0) {
-      setTimeSinceLast('');
-      return;
-    }
+    if (!list?.length) { setTimeSinceLast(''); return; }
     const last = list[0].timestamp?.toDate ? list[0].timestamp.toDate() : new Date(list[0].timestamp);
     setTimeSinceLast(formatDistanceToNow(last, { addSuffix: false }));
   };
@@ -91,11 +69,18 @@ export default function DashboardScreen() {
     return () => clearInterval(timerRef.current);
   }, [smokes]);
 
-  const handleLogSmoke = async () => {
+  const openForm = (type) => {
+    setNote('');
+    setTrigger('');
+    setFormType(type);
+    setFormVisible(true);
+  };
+
+  const handleSubmit = async () => {
     setLogging(true);
-    setModalVisible(false);
+    setFormVisible(false);
     try {
-      if (modalType === 'smoke') {
+      if (formType === 'smoke') {
         await logSmoke(user.uid, { note: note.trim(), trigger });
       } else {
         await logUrge(user.uid, { note: note.trim(), trigger });
@@ -104,31 +89,23 @@ export default function DashboardScreen() {
       setTrigger('');
       await load();
     } catch (e) {
-      Alert.alert('Error', 'Failed to log entry. Check your connection.');
+      Alert.alert('Error', 'Failed to log. Check your connection.');
     } finally {
       setLogging(false);
     }
   };
 
   const handleDelete = (smokeId, dateStr) => {
-    Alert.alert('Remove Entry', 'Remove this smoke from your log?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Remove',
-        style: 'destructive',
-        onPress: async () => {
-          await deleteSmoke(user.uid, smokeId, dateStr);
-          await load();
-        },
-      },
-    ]);
-  };
-
-  const openModal = (type) => {
-    setNote('');
-    setTrigger('');
-    setModalType(type);
-    setModalVisible(true);
+    if (Platform.OS === 'web') {
+      if (window.confirm('Remove this smoke from your log?')) {
+        deleteSmoke(user.uid, smokeId, dateStr).then(load);
+      }
+    } else {
+      Alert.alert('Remove Entry', 'Remove this smoke from your log?', [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Remove', style: 'destructive', onPress: () => deleteSmoke(user.uid, smokeId, dateStr).then(load) },
+      ]);
+    }
   };
 
   const greeting = () => {
@@ -138,157 +115,118 @@ export default function DashboardScreen() {
     return 'Good evening';
   };
 
-  const costPerCig = settings
-    ? (settings.pricePerPack / settings.cigarettesPerPack).toFixed(1)
-    : 0;
+  const costPerCig = settings ? (settings.pricePerPack / settings.cigarettesPerPack).toFixed(1) : 0;
+  const currency = settings?.currency || '₹';
+  const isUrge = formType === 'urge';
 
   if (loading) {
     return (
-      <View style={styles.center}>
+      <View style={[s.center, { backgroundColor: colors.background }]}>
         <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
   }
 
-  const isUrge = modalType === 'urge';
-
   return (
-    <SafeAreaView style={styles.safe}>
+    <View style={[s.root, { backgroundColor: colors.background }]}>
       <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={styles.content}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} tintColor={colors.primary} />}
+        contentContainerStyle={s.content}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} tintColor={colors.primary} />
+        }
       >
-        {/* Header */}
-        <View style={styles.headerRow}>
+        {/* ── Header ── */}
+        <View style={s.header}>
           <View>
-            <Text style={styles.greeting}>{greeting()},</Text>
-            <Text style={styles.userName}>{user.displayName || 'there'} 👋</Text>
+            <Text style={[s.greeting, { color: colors.textSecondary }]}>{greeting()},</Text>
+            <Text style={[s.userName, { color: colors.text }]}>{user.displayName || 'there'} 👋</Text>
           </View>
-          <Text style={styles.dateText}>{format(new Date(), 'EEE, MMM d')}</Text>
+          <View style={[s.dateBadge, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <Text style={[s.dateText, { color: colors.textSecondary }]}>{format(new Date(), 'EEE, MMM d')}</Text>
+          </View>
         </View>
 
-        {/* Stats cards */}
-        <View style={styles.statsRow}>
-          <LinearGradient
-            colors={['#FF6B35', '#FF4500']}
-            style={[styles.statsCard, { flex: 1.2 }]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
+        {/* ── Stat Cards ── */}
+        <View style={s.statsRow}>
+          <View style={[s.card, s.statCard, { backgroundColor: colors.primary }]}>
+            <View style={[s.statIcon, { backgroundColor: 'rgba(255,255,255,0.2)' }]}>
+              <Ionicons name="flame" size={18} color="#fff" />
+            </View>
+            <Text style={s.statValue}>{summary.count}</Text>
+            <Text style={s.statLabel}>Smoked Today</Text>
+            <Text style={s.statSub}>
+              {timeSinceLast ? `Last: ${timeSinceLast} ago` : 'Clean so far!'}
+            </Text>
+          </View>
+
+          <View style={[s.card, s.statCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <View style={[s.statIcon, { backgroundColor: `${colors.primary}20` }]}>
+              <Ionicons name="wallet-outline" size={18} color={colors.primary} />
+            </View>
+            <Text style={[s.statValue, { color: colors.text }]}>{currency}{summary.totalExpense.toFixed(0)}</Text>
+            <Text style={[s.statLabel, { color: colors.textSecondary }]}>Spent Today</Text>
+            <Text style={[s.statSub, { color: colors.textMuted }]}>{currency}{costPerCig}/cigarette</Text>
+          </View>
+        </View>
+
+        {/* ── Action Buttons ── */}
+        <View style={s.actionsRow}>
+          <TouchableOpacity
+            style={[s.actionBtn, { backgroundColor: colors.primary }, formVisible && formType === 'smoke' && s.actionBtnActive]}
+            onPress={() => formVisible && formType === 'smoke' ? setFormVisible(false) : openForm('smoke')}
+            disabled={logging}
+            activeOpacity={0.8}
           >
-            <Text style={styles.statsValue}>{summary.count}</Text>
-            <Text style={styles.statsLabel}>Smoked Today</Text>
-            {timeSinceLast ? (
-              <Text style={styles.statsSubLabel}>Last: {timeSinceLast} ago</Text>
+            {logging && formType === 'smoke' ? (
+              <ActivityIndicator color="#fff" size="small" />
             ) : (
-              <Text style={styles.statsSubLabel}>No smokes today</Text>
+              <>
+                <Ionicons name="flame" size={20} color="#fff" />
+                <Text style={s.actionBtnText}>I Smoked</Text>
+              </>
             )}
-          </LinearGradient>
+          </TouchableOpacity>
 
-          <LinearGradient
-            colors={['#1A1A3E', '#2A2A5E']}
-            style={[styles.statsCard, { flex: 1 }]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
+          <TouchableOpacity
+            style={[s.actionBtn, { backgroundColor: colors.surface, borderWidth: 1.5, borderColor: colors.success }, formVisible && formType === 'urge' && s.actionBtnActive]}
+            onPress={() => formVisible && formType === 'urge' ? setFormVisible(false) : openForm('urge')}
+            disabled={logging}
+            activeOpacity={0.8}
           >
-            <Text style={styles.statsValue}>
-              {settings?.currency || '₹'}{summary.totalExpense.toFixed(0)}
-            </Text>
-            <Text style={styles.statsLabel}>Spent Today</Text>
-            <Text style={styles.statsSubLabel}>{settings?.currency || '₹'}{costPerCig}/cig</Text>
-          </LinearGradient>
+            {logging && formType === 'urge' ? (
+              <ActivityIndicator color={colors.success} size="small" />
+            ) : (
+              <>
+                <Ionicons name="shield-checkmark-outline" size={20} color={colors.success} />
+                <Text style={[s.actionBtnText, { color: colors.success }]}>Resisted</Text>
+              </>
+            )}
+          </TouchableOpacity>
         </View>
 
-        {/* Log Smoke Button */}
-        <TouchableOpacity
-          style={[styles.logBtn, logging && styles.logBtnDisabled]}
-          onPress={() => openModal('smoke')}
-          disabled={logging}
-          activeOpacity={0.8}
-        >
-          {logging ? (
-            <ActivityIndicator color="#fff" size="large" />
-          ) : (
-            <>
-              <Ionicons name="flame" size={28} color="#fff" />
-              <Text style={styles.logBtnText}>I Just Smoked</Text>
-            </>
-          )}
-        </TouchableOpacity>
-
-        {/* Log Urge Button */}
-        <TouchableOpacity
-          style={[styles.urgeBtn, logging && styles.logBtnDisabled]}
-          onPress={() => openModal('urge')}
-          disabled={logging}
-          activeOpacity={0.8}
-        >
-          <Ionicons name="shield-checkmark-outline" size={22} color={colors.success} />
-          <Text style={styles.urgeBtnText}>I Resisted an Urge!</Text>
-        </TouchableOpacity>
-
-        {/* Today's log */}
-        <Text style={styles.sectionTitle}>
-          Today's Log{smokes.length > 0 ? ` (${smokes.length})` : ''}
-        </Text>
-
-        {smokes.length === 0 ? (
-          <View style={styles.emptyCard}>
-            <Text style={styles.emptyEmoji}>✨</Text>
-            <Text style={styles.emptyText}>No smokes logged today!</Text>
-            <Text style={styles.emptySubText}>Stay strong. Every minute counts.</Text>
-          </View>
-        ) : (
-          smokes.map((s, idx) => {
-            const ts = s.timestamp?.toDate ? s.timestamp.toDate() : new Date(s.timestamp);
-            return (
-              <View key={s.id} style={styles.entryCard}>
-                <View style={styles.entryLeft}>
-                  <Text style={styles.entryIndex}>#{smokes.length - idx}</Text>
-                  <View>
-                    <Text style={styles.entryTime}>{format(ts, 'h:mm a')}</Text>
-                    {!!s.trigger && (
-                      <View style={styles.triggerBadge}>
-                        <Text style={styles.triggerText}>{s.trigger}</Text>
-                      </View>
-                    )}
-                    {!!s.note && <Text style={styles.entryNote}>{s.note}</Text>}
-                  </View>
-                </View>
-                <TouchableOpacity onPress={() => handleDelete(s.id, s.date)} style={styles.deleteBtn}>
-                  <Ionicons name="trash-outline" size={16} color={colors.textMuted} />
-                </TouchableOpacity>
-              </View>
-            );
-          })
-        )}
-      </ScrollView>
-
-      {/* Log Modal */}
-      <Modal
-        visible={modalVisible}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setModalVisible(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalSheet}>
-            <View style={styles.modalHandle} />
-            <Text style={styles.modalTitle}>
-              {isUrge ? '💪 Log an Urge Resisted' : '🚬 Log a Smoke'}
-            </Text>
-            <Text style={styles.modalSubtitle}>
-              {isUrge ? 'What triggered the urge?' : 'What triggered the urge to smoke?'}
+        {/* ── Inline Log Form ── */}
+        {formVisible && (
+          <View style={[s.card, s.formCard, { backgroundColor: colors.surface, borderColor: isUrge ? colors.success : colors.primary }]}>
+            <Text style={[s.formTitle, { color: colors.text }]}>
+              {isUrge ? '💪 What triggered the urge?' : '🚬 What triggered the smoke?'}
             </Text>
 
-            <View style={styles.triggerGrid}>
+            <View style={s.chipGrid}>
               {TRIGGERS.map((t) => (
                 <TouchableOpacity
                   key={t}
-                  style={[styles.triggerChip, trigger === t && (isUrge ? styles.triggerChipUrge : styles.triggerChipActive)]}
+                  style={[
+                    s.chip,
+                    { backgroundColor: colors.background, borderColor: colors.border },
+                    trigger === t && { borderColor: isUrge ? colors.success : colors.primary, backgroundColor: isUrge ? `${colors.success}15` : `${colors.primary}15` },
+                  ]}
                   onPress={() => setTrigger(trigger === t ? '' : t)}
                 >
-                  <Text style={[styles.triggerChipText, trigger === t && (isUrge ? styles.triggerChipTextUrge : styles.triggerChipTextActive)]}>
+                  <Text style={[
+                    s.chipText,
+                    { color: colors.textSecondary },
+                    trigger === t && { color: isUrge ? colors.success : colors.primary, fontWeight: '600' },
+                  ]}>
                     {t}
                   </Text>
                 </TouchableOpacity>
@@ -296,183 +234,139 @@ export default function DashboardScreen() {
             </View>
 
             <TextInput
-              style={styles.noteInput}
+              style={[s.noteInput, { backgroundColor: colors.background, borderColor: colors.border, color: colors.text }]}
               value={note}
               onChangeText={setNote}
-              placeholder="Optional note…"
+              placeholder="Add a note… (optional)"
               placeholderTextColor={colors.textMuted}
               multiline
               maxLength={140}
             />
 
-            <TouchableOpacity
-              style={[styles.modalLogBtn, isUrge && styles.modalLogBtnUrge]}
-              onPress={handleLogSmoke}
-            >
-              <Ionicons name={isUrge ? 'shield-checkmark' : 'flame'} size={20} color="#fff" />
-              <Text style={styles.modalLogBtnText}>
-                {isUrge ? 'Log Urge Resisted' : 'Log Smoke'}
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={styles.cancelBtn} onPress={() => setModalVisible(false)}>
-              <Text style={styles.cancelText}>Cancel</Text>
-            </TouchableOpacity>
+            <View style={s.formActions}>
+              <TouchableOpacity style={[s.cancelBtn, { borderColor: colors.border }]} onPress={() => setFormVisible(false)}>
+                <Text style={[s.cancelText, { color: colors.textSecondary }]}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[s.submitBtn, { backgroundColor: isUrge ? colors.success : colors.primary }]}
+                onPress={handleSubmit}
+              >
+                <Ionicons name={isUrge ? 'shield-checkmark' : 'flame'} size={16} color="#fff" />
+                <Text style={s.submitText}>{isUrge ? 'Log Resisted' : 'Log Smoke'}</Text>
+              </TouchableOpacity>
+            </View>
           </View>
+        )}
+
+        {/* ── Today's Log ── */}
+        <View style={s.sectionHeader}>
+          <Text style={[s.sectionTitle, { color: colors.text }]}>Today's Log</Text>
+          {smokes.length > 0 && (
+            <View style={[s.badge, { backgroundColor: `${colors.primary}20` }]}>
+              <Text style={[s.badgeText, { color: colors.primary }]}>{smokes.length}</Text>
+            </View>
+          )}
         </View>
-      </Modal>
-    </SafeAreaView>
+
+        {smokes.length === 0 ? (
+          <View style={[s.card, s.emptyCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <Text style={s.emptyEmoji}>✨</Text>
+            <Text style={[s.emptyTitle, { color: colors.text }]}>No smokes logged today!</Text>
+            <Text style={[s.emptySubtitle, { color: colors.textSecondary }]}>Stay strong. Every minute counts.</Text>
+          </View>
+        ) : (
+          smokes.map((item, idx) => {
+            const ts = item.timestamp?.toDate ? item.timestamp.toDate() : new Date(item.timestamp);
+            return (
+              <View key={item.id} style={[s.card, s.entryCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                <View style={[s.entryDot, { backgroundColor: colors.primary }]} />
+                <View style={s.entryBody}>
+                  <Text style={[s.entryTime, { color: colors.text }]}>{format(ts, 'h:mm a')}</Text>
+                  {!!item.trigger && (
+                    <View style={[s.triggerPill, { backgroundColor: `${colors.primary}15` }]}>
+                      <Text style={[s.triggerPillText, { color: colors.primary }]}>{item.trigger}</Text>
+                    </View>
+                  )}
+                  {!!item.note && <Text style={[s.entryNote, { color: colors.textSecondary }]}>{item.note}</Text>}
+                </View>
+                <View style={s.entryRight}>
+                  <Text style={[s.entryIndex, { color: colors.textMuted }]}>#{smokes.length - idx}</Text>
+                  <TouchableOpacity onPress={() => handleDelete(item.id, item.date)} style={s.deleteBtn}>
+                    <Ionicons name="trash-outline" size={14} color={colors.textMuted} />
+                  </TouchableOpacity>
+                </View>
+              </View>
+            );
+          })
+        )}
+      </ScrollView>
+    </View>
   );
 }
 
-const createStyles = (colors) => StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.background },
-  scroll: { flex: 1 },
-  content: { padding: spacing.md, paddingBottom: 32 },
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background },
+const s = StyleSheet.create({
+  root: { flex: 1 },
+  content: { padding: spacing.md, paddingBottom: 40, gap: spacing.sm },
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
 
-  headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: spacing.lg },
-  greeting: { fontSize: fontSize.sm, color: colors.textSecondary },
-  userName: { fontSize: fontSize.xl, fontWeight: '700', color: colors.text },
-  dateText: { fontSize: fontSize.sm, color: colors.textSecondary, marginTop: 4 },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: spacing.sm },
+  greeting: { fontSize: fontSize.sm },
+  userName: { fontSize: fontSize.xl, fontWeight: '700' },
+  dateBadge: { borderRadius: radius.full, paddingHorizontal: 12, paddingVertical: 6, borderWidth: 1 },
+  dateText: { fontSize: fontSize.xs, fontWeight: '500' },
 
-  statsRow: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.lg },
-  statsCard: { borderRadius: radius.lg, padding: spacing.md, minHeight: 100, justifyContent: 'center' },
-  statsValue: { fontSize: fontSize.xxxl, fontWeight: '800', color: '#fff' },
-  statsLabel: { fontSize: fontSize.sm, color: 'rgba(255,255,255,0.8)', marginTop: 2 },
-  statsSubLabel: { fontSize: fontSize.xs, color: 'rgba(255,255,255,0.6)', marginTop: 4 },
+  statsRow: { flexDirection: 'row', gap: spacing.sm },
+  card: { borderRadius: radius.lg, borderWidth: 1, borderColor: 'transparent' },
+  statCard: { flex: 1, padding: spacing.md, gap: 4 },
+  statIcon: { width: 32, height: 32, borderRadius: radius.sm, alignItems: 'center', justifyContent: 'center', marginBottom: 4 },
+  statValue: { fontSize: fontSize.xxxl, fontWeight: '800', color: '#fff' },
+  statLabel: { fontSize: fontSize.xs, color: 'rgba(255,255,255,0.8)', fontWeight: '500' },
+  statSub: { fontSize: fontSize.xs, color: 'rgba(255,255,255,0.6)' },
 
-  logBtn: {
-    backgroundColor: colors.primary,
-    borderRadius: radius.xl,
-    padding: spacing.lg,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-    marginBottom: spacing.sm,
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
-    shadowRadius: 12,
-    elevation: 8,
-    minHeight: 70,
+  actionsRow: { flexDirection: 'row', gap: spacing.sm },
+  actionBtn: {
+    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 8, paddingVertical: spacing.md, borderRadius: radius.lg, minHeight: 52,
   },
-  logBtnDisabled: { opacity: 0.6 },
-  logBtnText: { fontSize: fontSize.xl, fontWeight: '800', color: '#fff', letterSpacing: 0.5 },
+  actionBtnActive: { opacity: 0.85 },
+  actionBtnText: { fontSize: fontSize.md, fontWeight: '700', color: '#fff' },
 
-  urgeBtn: {
-    borderRadius: radius.xl,
-    padding: spacing.md,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-    marginBottom: spacing.xl,
-    borderWidth: 2,
-    borderColor: colors.success,
-    backgroundColor: `${colors.success}15`,
-    minHeight: 54,
-  },
-  urgeBtnText: { fontSize: fontSize.lg, fontWeight: '700', color: colors.success },
-
-  sectionTitle: { fontSize: fontSize.lg, fontWeight: '700', color: colors.text, marginBottom: spacing.md },
-
-  emptyCard: {
-    backgroundColor: colors.surface,
+  formCard: {
+    padding: spacing.md, borderWidth: 1.5, gap: spacing.sm,
     borderRadius: radius.lg,
-    padding: spacing.xl,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderStyle: 'dashed',
   },
-  emptyEmoji: { fontSize: 40, marginBottom: spacing.sm },
-  emptyText: { fontSize: fontSize.lg, fontWeight: '600', color: colors.text },
-  emptySubText: { fontSize: fontSize.sm, color: colors.textSecondary, marginTop: 4, textAlign: 'center' },
-
-  entryCard: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.md,
-    padding: spacing.md,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: spacing.sm,
-    borderLeftWidth: 3,
-    borderLeftColor: colors.primary,
-  },
-  entryLeft: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.md, flex: 1 },
-  entryIndex: { fontSize: fontSize.xs, color: colors.textMuted, width: 24, paddingTop: 2 },
-  entryTime: { fontSize: fontSize.md, fontWeight: '600', color: colors.text },
-  triggerBadge: {
-    backgroundColor: 'rgba(255,107,53,0.15)',
-    borderRadius: radius.full,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    marginTop: 4,
-    alignSelf: 'flex-start',
-  },
-  triggerText: { fontSize: fontSize.xs, color: colors.primary, fontWeight: '600' },
-  entryNote: { fontSize: fontSize.xs, color: colors.textSecondary, marginTop: 4, maxWidth: 220 },
-  deleteBtn: { padding: spacing.sm },
-
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' },
-  modalSheet: {
-    backgroundColor: colors.surface,
-    borderTopLeftRadius: radius.xl,
-    borderTopRightRadius: radius.xl,
-    padding: spacing.lg,
-    paddingBottom: Platform.OS === 'ios' ? 40 : spacing.lg,
-  },
-  modalHandle: {
-    width: 40,
-    height: 4,
-    backgroundColor: colors.border,
-    borderRadius: 2,
-    alignSelf: 'center',
-    marginBottom: spacing.lg,
-  },
-  modalTitle: { fontSize: fontSize.xl, fontWeight: '700', color: colors.text, marginBottom: 4 },
-  modalSubtitle: { fontSize: fontSize.sm, color: colors.textSecondary, marginBottom: spacing.md },
-  triggerGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginBottom: spacing.md },
-  triggerChip: {
-    borderRadius: radius.full,
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surfaceHigh,
-  },
-  triggerChipActive: { borderColor: colors.primary, backgroundColor: 'rgba(255,107,53,0.15)' },
-  triggerChipUrge: { borderColor: colors.success, backgroundColor: 'rgba(76,175,80,0.15)' },
-  triggerChipText: { fontSize: fontSize.sm, color: colors.textSecondary },
-  triggerChipTextActive: { color: colors.primary, fontWeight: '600' },
-  triggerChipTextUrge: { color: colors.success, fontWeight: '600' },
+  formTitle: { fontSize: fontSize.md, fontWeight: '600' },
+  chipGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  chip: { borderRadius: radius.full, paddingHorizontal: 12, paddingVertical: 6, borderWidth: 1 },
+  chipText: { fontSize: fontSize.xs },
   noteInput: {
-    backgroundColor: colors.surfaceHigh,
-    borderRadius: radius.md,
-    padding: spacing.md,
-    color: colors.text,
-    fontSize: fontSize.md,
-    minHeight: 80,
-    textAlignVertical: 'top',
-    marginBottom: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.border,
+    borderRadius: radius.md, borderWidth: 1, padding: spacing.sm,
+    fontSize: fontSize.sm, minHeight: 64, textAlignVertical: 'top',
   },
-  modalLogBtn: {
-    backgroundColor: colors.primary,
-    borderRadius: radius.md,
-    padding: spacing.md,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-    marginBottom: spacing.sm,
-  },
-  modalLogBtnUrge: { backgroundColor: colors.success },
-  modalLogBtnText: { color: '#fff', fontSize: fontSize.lg, fontWeight: '700' },
-  cancelBtn: { padding: spacing.md, alignItems: 'center' },
-  cancelText: { color: colors.textSecondary, fontSize: fontSize.md },
+  formActions: { flexDirection: 'row', gap: spacing.sm, marginTop: 4 },
+  cancelBtn: { flex: 1, borderRadius: radius.md, borderWidth: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: spacing.sm },
+  cancelText: { fontSize: fontSize.sm, fontWeight: '600' },
+  submitBtn: { flex: 2, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: radius.md, paddingVertical: spacing.sm },
+  submitText: { color: '#fff', fontSize: fontSize.sm, fontWeight: '700' },
+
+  sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: spacing.sm },
+  sectionTitle: { fontSize: fontSize.md, fontWeight: '700' },
+  badge: { borderRadius: radius.full, paddingHorizontal: 8, paddingVertical: 2 },
+  badgeText: { fontSize: fontSize.xs, fontWeight: '700' },
+
+  emptyCard: { padding: spacing.xl, alignItems: 'center', gap: 6, borderStyle: 'dashed' },
+  emptyEmoji: { fontSize: 36 },
+  emptyTitle: { fontSize: fontSize.md, fontWeight: '600' },
+  emptySubtitle: { fontSize: fontSize.sm, textAlign: 'center' },
+
+  entryCard: { flexDirection: 'row', alignItems: 'flex-start', padding: spacing.md, gap: spacing.sm },
+  entryDot: { width: 8, height: 8, borderRadius: 4, marginTop: 6 },
+  entryBody: { flex: 1, gap: 4 },
+  entryTime: { fontSize: fontSize.sm, fontWeight: '600' },
+  triggerPill: { alignSelf: 'flex-start', borderRadius: radius.full, paddingHorizontal: 8, paddingVertical: 2 },
+  triggerPillText: { fontSize: fontSize.xs, fontWeight: '600' },
+  entryNote: { fontSize: fontSize.xs },
+  entryRight: { alignItems: 'flex-end', gap: 8 },
+  entryIndex: { fontSize: fontSize.xs },
+  deleteBtn: { padding: 4 },
 });
