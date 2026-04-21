@@ -1,245 +1,134 @@
-import React, { useState, useCallback, useMemo } from 'react';
-import {
-  View,
-  Text,
-  ScrollView,
-  TouchableOpacity,
-  StyleSheet,
-  ActivityIndicator,
-  RefreshControl,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import React, { useState, useCallback } from 'react';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator, RefreshControl } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { format, parseISO, isToday, isYesterday } from 'date-fns';
+import { format } from 'date-fns';
 import { useFocusEffect } from '@react-navigation/native';
-
 import { useAuth } from '../context/AuthContext';
-import { useTheme } from '../context/ThemeContext';
-import { spacing, radius, fontSize } from '../theme';
-import { getRecentSummaries, getSmokesForDate, getSettings } from '../services/smokingService';
+import { colors, spacing, radius, fontSize } from '../theme';
+import Card from '../components/ui/Card';
+import { getRecentSummaries, getSmokesForDate } from '../services/smokingService';
 
 export default function HistoryScreen() {
   const { user } = useAuth();
-  const { colors } = useTheme();
-  const styles = useMemo(() => createStyles(colors), [colors]);
-
   const [summaries, setSummaries] = useState([]);
   const [expanded, setExpanded] = useState(null);
-  const [expandedSmokes, setExpandedSmokes] = useState([]);
-  const [loadingExpand, setLoadingExpand] = useState(false);
-  const [settings, setSettings] = useState(null);
+  const [daySmokes, setDaySmokes] = useState({});
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [loadingDay, setLoadingDay] = useState(null);
 
   const load = useCallback(async () => {
     try {
-      const [sums, cfg] = await Promise.all([
-        getRecentSummaries(user.uid, 30),
-        getSettings(user.uid),
-      ]);
-      setSummaries(sums.filter((s) => s.count > 0).reverse());
-      setSettings(cfg);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
+      const data = await getRecentSummaries(user.uid, 30);
+      setSummaries(data.filter((d) => d.count > 0).reverse());
+    } catch (e) { console.error(e); }
+    finally { setLoading(false); setRefreshing(false); }
   }, [user.uid]);
 
-  useFocusEffect(
-    useCallback(() => {
-      load();
-    }, [load])
-  );
+  useFocusEffect(useCallback(() => { load(); }, [load]));
 
-  const toggleExpand = async (dateStr) => {
-    if (expanded === dateStr) {
-      setExpanded(null);
-      setExpandedSmokes([]);
-      return;
-    }
+  const toggleDay = async (dateStr) => {
+    if (expanded === dateStr) { setExpanded(null); return; }
     setExpanded(dateStr);
-    setLoadingExpand(true);
-    try {
-      const list = await getSmokesForDate(user.uid, dateStr);
-      setExpandedSmokes(list);
-    } finally {
-      setLoadingExpand(false);
+    if (!daySmokes[dateStr]) {
+      setLoadingDay(dateStr);
+      try {
+        const list = await getSmokesForDate(user.uid, dateStr);
+        setDaySmokes((p) => ({ ...p, [dateStr]: list }));
+      } catch (e) { console.error(e); }
+      finally { setLoadingDay(null); }
     }
   };
 
-  const labelDate = (dateStr) => {
-    const d = parseISO(dateStr);
-    if (isToday(d)) return 'Today';
-    if (isYesterday(d)) return 'Yesterday';
-    return format(d, 'EEE, MMM d');
-  };
-
-  const currency = settings?.currency || '₹';
-
-  if (loading) {
-    return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color={colors.primary} />
-      </View>
-    );
-  }
+  if (loading) return <View style={s.center}><ActivityIndicator size="large" color={colors.primary} /></View>;
 
   return (
-    <SafeAreaView style={styles.safe}>
+    <View style={s.root}>
+      <View style={s.pageHeader}>
+        <Text style={s.pageTitle}>History</Text>
+        <Text style={s.pageSub}>Last 30 days with smokes</Text>
+      </View>
+
       <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={styles.content}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={() => { setRefreshing(true); load(); }}
-            tintColor={colors.primary}
-          />
-        }
+        contentContainerStyle={s.content}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} tintColor={colors.primary} />}
       >
-        <Text style={styles.title}>History</Text>
-        <Text style={styles.subtitle}>Last 30 days</Text>
-
         {summaries.length === 0 ? (
-          <View style={styles.empty}>
-            <Text style={styles.emptyEmoji}>📭</Text>
-            <Text style={styles.emptyText}>No history yet</Text>
-            <Text style={styles.emptySubText}>Start logging smokes on the Dashboard.</Text>
-          </View>
-        ) : (
-          summaries.map((s) => (
-            <View key={s.date}>
-              <TouchableOpacity
-                style={[styles.dayCard, expanded === s.date && styles.dayCardExpanded]}
-                onPress={() => toggleExpand(s.date)}
-                activeOpacity={0.7}
-              >
-                <View style={styles.dayLeft}>
-                  <Text style={styles.dayLabel}>{labelDate(s.date)}</Text>
-                  <Text style={styles.dayDateFull}>{format(parseISO(s.date), 'yyyy-MM-dd')}</Text>
-                </View>
-                <View style={styles.dayRight}>
-                  <View style={styles.countBadge}>
-                    <Ionicons name="flame" size={12} color={colors.primary} />
-                    <Text style={styles.countText}>{s.count}</Text>
+          <Card style={s.empty}>
+            <Text style={{ fontSize: 36 }}>📭</Text>
+            <Text style={s.emptyTitle}>No history yet</Text>
+            <Text style={s.emptySub}>Your logged smokes will appear here.</Text>
+          </Card>
+        ) : summaries.map((day) => (
+          <Card key={day.date} style={s.dayCard}>
+            <TouchableOpacity style={s.dayRow} onPress={() => toggleDay(day.date)} activeOpacity={0.75}>
+              <View style={{ gap: 6 }}>
+                <Text style={s.dayDate}>{format(new Date(day.date + 'T00:00:00'), 'EEE, MMM d, yyyy')}</Text>
+                <View style={{ flexDirection: 'row', gap: 8 }}>
+                  <View style={[s.pill, { backgroundColor: colors.accentLight }]}>
+                    <Ionicons name="flame" size={11} color={colors.accent} />
+                    <Text style={[s.pillTxt, { color: colors.accent }]}>{day.count} smokes</Text>
                   </View>
-                  <Text style={styles.expenseText}>
-                    {currency}{s.totalExpense.toFixed(0)}
-                  </Text>
-                  <Ionicons
-                    name={expanded === s.date ? 'chevron-up' : 'chevron-down'}
-                    size={16}
-                    color={colors.textMuted}
-                  />
+                  <View style={[s.pill, { backgroundColor: colors.primaryLight }]}>
+                    <Ionicons name="wallet-outline" size={11} color={colors.primary} />
+                    <Text style={[s.pillTxt, { color: colors.primary }]}>₹{day.totalExpense.toFixed(0)}</Text>
+                  </View>
                 </View>
-              </TouchableOpacity>
+              </View>
+              <Ionicons name={expanded === day.date ? 'chevron-up' : 'chevron-down'} size={18} color={colors.textMuted} />
+            </TouchableOpacity>
 
-              {expanded === s.date && (
-                <View style={styles.expandedPanel}>
-                  {loadingExpand ? (
-                    <ActivityIndicator size="small" color={colors.primary} />
-                  ) : expandedSmokes.length === 0 ? (
-                    <Text style={styles.noEntries}>No entries found.</Text>
-                  ) : (
-                    expandedSmokes.map((smoke) => {
-                      const ts = smoke.timestamp?.toDate
-                        ? smoke.timestamp.toDate()
-                        : new Date(smoke.timestamp);
+            {expanded === day.date && (
+              <View style={s.entries}>
+                {loadingDay === day.date
+                  ? <ActivityIndicator size="small" color={colors.primary} style={{ padding: spacing.md }} />
+                  : (daySmokes[day.date] || []).length === 0
+                  ? <Text style={s.none}>No detailed records</Text>
+                  : (daySmokes[day.date] || []).map((item, i) => {
+                      const ts = item.timestamp?.toDate ? item.timestamp.toDate() : new Date(item.timestamp);
                       return (
-                        <View key={smoke.id} style={styles.smokeEntry}>
-                          <View style={styles.timelineDot} />
-                          <View style={styles.entryBody}>
-                            <Text style={styles.entryTime}>{format(ts, 'h:mm a')}</Text>
-                            {!!smoke.trigger && (
-                              <View style={styles.triggerBadge}>
-                                <Text style={styles.triggerText}>{smoke.trigger}</Text>
-                              </View>
+                        <View key={item.id} style={[s.entry, i > 0 && { borderTopWidth: 1, borderColor: colors.border }]}>
+                          <View style={s.dot} />
+                          <View style={{ flex: 1, gap: 4 }}>
+                            <Text style={s.entryTime}>{format(ts, 'h:mm a')}</Text>
+                            {!!item.trigger && (
+                              <View style={s.trigger}><Text style={s.triggerTxt}>{item.trigger}</Text></View>
                             )}
-                            {!!smoke.note && (
-                              <Text style={styles.entryNote}>{smoke.note}</Text>
-                            )}
+                            {!!item.note && <Text style={s.note}>{item.note}</Text>}
                           </View>
                         </View>
                       );
-                    })
-                  )}
-                </View>
-              )}
-            </View>
-          ))
-        )}
+                    })}
+              </View>
+            )}
+          </Card>
+        ))}
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 
-const createStyles = (colors) => StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.background },
-  scroll: { flex: 1 },
-  content: { padding: spacing.md, paddingBottom: 32 },
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background },
-
-  title: { fontSize: fontSize.xxl, fontWeight: '700', color: colors.text },
-  subtitle: { fontSize: fontSize.sm, color: colors.textSecondary, marginBottom: spacing.lg },
-
-  empty: { alignItems: 'center', paddingTop: 60 },
-  emptyEmoji: { fontSize: 48, marginBottom: spacing.md },
-  emptyText: { fontSize: fontSize.lg, color: colors.text, fontWeight: '600' },
-  emptySubText: { fontSize: fontSize.sm, color: colors.textSecondary, marginTop: 4 },
-
-  dayCard: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.md,
-    padding: spacing.md,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 2,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  dayCardExpanded: { borderColor: colors.primary, borderBottomLeftRadius: 0, borderBottomRightRadius: 0 },
-
-  dayLeft: {},
-  dayLabel: { fontSize: fontSize.md, fontWeight: '600', color: colors.text },
-  dayDateFull: { fontSize: fontSize.xs, color: colors.textMuted, marginTop: 2 },
-
-  dayRight: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
-  countBadge: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  countText: { fontSize: fontSize.md, fontWeight: '700', color: colors.primary },
-  expenseText: { fontSize: fontSize.sm, color: colors.textSecondary },
-
-  expandedPanel: {
-    backgroundColor: colors.surfaceHigh,
-    borderWidth: 1,
-    borderTopWidth: 0,
-    borderColor: colors.primary,
-    borderBottomLeftRadius: radius.md,
-    borderBottomRightRadius: radius.md,
-    padding: spacing.md,
-    marginBottom: spacing.sm,
-  },
-  noEntries: { color: colors.textMuted, fontSize: fontSize.sm },
-
-  smokeEntry: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.md, marginBottom: 12 },
-  timelineDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: colors.primary,
-    marginTop: 5,
-    flexShrink: 0,
-  },
-  entryBody: { flex: 1 },
-  entryTime: { fontSize: fontSize.md, fontWeight: '600', color: colors.text },
-  triggerBadge: {
-    backgroundColor: 'rgba(255,107,53,0.15)',
-    borderRadius: radius.full,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    marginTop: 4,
-    alignSelf: 'flex-start',
-  },
-  triggerText: { fontSize: fontSize.xs, color: colors.primary, fontWeight: '600' },
-  entryNote: { fontSize: fontSize.xs, color: colors.textSecondary, marginTop: 4 },
+const s = StyleSheet.create({
+  root: { flex: 1, backgroundColor: colors.surface },
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  pageHeader: { padding: spacing.md, paddingBottom: spacing.sm, backgroundColor: colors.background, borderBottomWidth: 1, borderColor: colors.border },
+  pageTitle: { fontSize: fontSize.xl, fontWeight: '800', color: colors.text },
+  pageSub: { fontSize: fontSize.sm, color: colors.textSecondary },
+  content: { padding: spacing.md, gap: spacing.sm, paddingBottom: 40 },
+  empty: { alignItems: 'center', padding: spacing.xl, gap: 6, borderStyle: 'dashed' },
+  emptyTitle: { fontSize: fontSize.md, fontWeight: '600', color: colors.text },
+  emptySub: { fontSize: fontSize.sm, color: colors.textSecondary },
+  dayCard: { overflow: 'hidden' },
+  dayRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: spacing.md },
+  dayDate: { fontSize: fontSize.sm, fontWeight: '700', color: colors.text },
+  pill: { flexDirection: 'row', alignItems: 'center', gap: 4, borderRadius: radius.full, paddingHorizontal: 8, paddingVertical: 3 },
+  pillTxt: { fontSize: fontSize.xs, fontWeight: '600' },
+  entries: { borderTopWidth: 1, borderColor: colors.border, paddingHorizontal: spacing.md, paddingBottom: spacing.sm },
+  none: { fontSize: fontSize.sm, color: colors.textMuted, padding: spacing.md, textAlign: 'center' },
+  entry: { flexDirection: 'row', alignItems: 'flex-start', paddingVertical: spacing.sm, gap: spacing.sm },
+  dot: { width: 7, height: 7, borderRadius: 4, backgroundColor: colors.accent, marginTop: 5 },
+  entryTime: { fontSize: fontSize.sm, fontWeight: '600', color: colors.text },
+  trigger: { alignSelf: 'flex-start', backgroundColor: colors.accentLight, borderRadius: radius.full, paddingHorizontal: 8, paddingVertical: 2 },
+  triggerTxt: { fontSize: fontSize.xs, color: colors.accentDark, fontWeight: '600' },
+  note: { fontSize: fontSize.xs, color: colors.textSecondary },
 });

@@ -1,272 +1,175 @@
-import React, { useState, useCallback, useMemo } from 'react';
-import {
-  View,
-  Text,
-  ScrollView,
-  StyleSheet,
-  ActivityIndicator,
-  RefreshControl,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import React, { useState, useCallback } from 'react';
+import { View, Text, ScrollView, StyleSheet, ActivityIndicator, RefreshControl } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { format, subDays } from 'date-fns';
 import { useFocusEffect } from '@react-navigation/native';
-import { format, subDays, parseISO } from 'date-fns';
-
 import { useAuth } from '../context/AuthContext';
-import { useTheme } from '../context/ThemeContext';
-import { spacing, radius, fontSize } from '../theme';
-import {
-  getRecentSummaries,
-  getMonthlyTotal,
-  getHourlyDistribution,
-  getSettings,
-} from '../services/smokingService';
-
-const BarChart = ({ data, maxVal, labelFn, color, height = 120, colors }) => {
-  if (!data || data.length === 0) return null;
-  const max = maxVal || Math.max(...data, 1);
-  return (
-    <View style={{ height: height + 40 }}>
-      <View style={{ flexDirection: 'row', alignItems: 'flex-end', height, gap: 2 }}>
-        {data.map((val, i) => (
-          <View key={i} style={{ flex: 1, alignItems: 'center', justifyContent: 'flex-end', height }}>
-            <View
-              style={{
-                width: '80%',
-                height: Math.max(2, (val / max) * height),
-                backgroundColor: val === 0 ? colors.border : color,
-                borderRadius: 3,
-              }}
-            />
-          </View>
-        ))}
-      </View>
-      <View style={{ flexDirection: 'row', gap: 2, marginTop: 6 }}>
-        {data.map((_, i) => (
-          <Text
-            key={i}
-            style={{ flex: 1, textAlign: 'center', fontSize: 9, color: colors.textMuted }}
-            numberOfLines={1}
-          >
-            {labelFn(i)}
-          </Text>
-        ))}
-      </View>
-    </View>
-  );
-};
+import { colors, spacing, radius, fontSize } from '../theme';
+import Card from '../components/ui/Card';
+import BarChart from '../components/charts/BarChart';
+import { getRecentSummaries, getMonthlyTotal, getHourlyDistribution, getSettings } from '../services/smokingService';
 
 export default function StatsScreen() {
   const { user } = useAuth();
-  const { colors } = useTheme();
-  const styles = useMemo(() => createStyles(colors), [colors]);
-
-  const [weekly, setWeekly] = useState([]);
-  const [hourly, setHourly] = useState([]);
   const [monthly, setMonthly] = useState(null);
+  const [weekly, setWeekly] = useState([]);
+  const [prevWeek, setPrevWeek] = useState([]);
+  const [hourly, setHourly] = useState([]);
   const [settings, setSettings] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(async () => {
     try {
-      const [sums, mon, hours, cfg] = await Promise.all([
-        getRecentSummaries(user.uid, 7),
+      const [mon, summaries, hrs, cfg] = await Promise.all([
         getMonthlyTotal(user.uid),
+        getRecentSummaries(user.uid, 14),
         getHourlyDistribution(user.uid),
         getSettings(user.uid),
       ]);
-      setWeekly(sums);
       setMonthly(mon);
-      setHourly(hours);
       setSettings(cfg);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
+      setWeekly(summaries.slice(7));
+      setPrevWeek(summaries.slice(0, 7));
+      setHourly(hrs);
+    } catch (e) { console.error(e); }
+    finally { setLoading(false); setRefreshing(false); }
   }, [user.uid]);
 
-  useFocusEffect(
-    useCallback(() => {
-      load();
-    }, [load])
-  );
+  useFocusEffect(useCallback(() => { load(); }, [load]));
+
+  if (loading) return <View style={s.center}><ActivityIndicator size="large" color={colors.primary} /></View>;
 
   const currency = settings?.currency || '₹';
+  const thisWeekTotal = weekly.reduce((a, d) => a + d.count, 0);
+  const prevWeekTotal = prevWeek.reduce((a, d) => a + d.count, 0);
+  const weekChange = prevWeekTotal === 0 ? 0 : ((thisWeekTotal - prevWeekTotal) / prevWeekTotal * 100).toFixed(0);
+  const weekUp = thisWeekTotal > prevWeekTotal;
+
+  const weekData = weekly.map((d) => ({
+    label: format(new Date(d.date + 'T00:00:00'), 'EEE'),
+    value: d.count,
+  }));
+
   const peakHour = hourly.indexOf(Math.max(...hourly));
-  const peakLabel = peakHour >= 0 ? formatHour(peakHour) : '–';
+  const hourData = Array.from({ length: 24 }, (_, i) => ({
+    label: i % 6 === 0 ? `${i}h` : '',
+    value: hourly[i] || 0,
+  }));
 
-  const weeklyTrend = () => {
-    if (weekly.length < 2) return null;
-    const last3 = weekly.slice(-3).reduce((s, d) => s + d.count, 0);
-    const prev3 = weekly.slice(0, 3).reduce((s, d) => s + d.count, 0);
-    if (prev3 === 0) return null;
-    const change = ((last3 - prev3) / prev3) * 100;
-    return change;
-  };
-
-  const trend = weeklyTrend();
-
-  if (loading) {
-    return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color={colors.primary} />
-      </View>
-    );
-  }
+  const dailySavings = settings ? ((settings.pricePerPack / settings.cigarettesPerPack) * 5).toFixed(0) : 0;
+  const monthlySavings = (dailySavings * 30).toFixed(0);
 
   return (
-    <SafeAreaView style={styles.safe}>
+    <View style={s.root}>
+      <View style={s.pageHeader}>
+        <Text style={s.pageTitle}>Statistics</Text>
+        <Text style={s.pageSub}>Your smoking patterns</Text>
+      </View>
+
       <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={styles.content}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={() => { setRefreshing(true); load(); }}
-            tintColor={colors.primary}
-          />
-        }
+        contentContainerStyle={s.content}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} tintColor={colors.primary} />}
       >
-        <Text style={styles.title}>Statistics</Text>
-        <Text style={styles.subtitle}>Insights into your habits</Text>
-
-        {monthly && (
-          <View style={styles.overviewRow}>
-            <StatTile icon="flame" label="This Month" value={monthly.totalSmokes} unit="smokes" color={colors.primary} styles={styles} />
-            <StatTile icon="cash-outline" label="Spent" value={`${currency}${monthly.totalExpense.toFixed(0)}`} unit="30 days" color={colors.info} styles={styles} />
-            <StatTile icon="trending-down-outline" label="Daily Avg" value={monthly.avgPerDay} unit="per day" color={colors.warning} styles={styles} />
-          </View>
-        )}
-
-        {trend !== null && (
-          <View style={[styles.trendCard, { borderColor: trend > 0 ? colors.danger : colors.success }]}>
-            <Text style={styles.trendEmoji}>{trend > 0 ? '📈' : '📉'}</Text>
-            <Text style={styles.trendText}>
-              You're smoking{' '}
-              <Text style={{ color: trend > 0 ? colors.danger : colors.success, fontWeight: '700' }}>
-                {Math.abs(trend).toFixed(0)}% {trend > 0 ? 'more' : 'less'}
-              </Text>
-              {' '}compared to the start of this week.
-            </Text>
-          </View>
-        )}
-
-        <View style={styles.chartCard}>
-          <Text style={styles.chartTitle}>Last 7 Days</Text>
-          <BarChart
-            data={weekly.map((d) => d.count)}
-            color={colors.primary}
-            labelFn={(i) => weekly[i] ? format(parseISO(weekly[i].date), 'EEE') : ''}
-            height={100}
-            colors={colors}
-          />
+        {/* Monthly Overview */}
+        <Text style={s.sectionLabel}>This Month</Text>
+        <View style={s.row}>
+          <Card style={[s.tile, { borderTopWidth: 3, borderTopColor: colors.accent }]}>
+            <Ionicons name="flame" size={20} color={colors.accent} />
+            <Text style={[s.tileValue, { color: colors.accent }]}>{monthly?.totalSmokes ?? 0}</Text>
+            <Text style={s.tileLabel}>Total Smokes</Text>
+          </Card>
+          <Card style={[s.tile, { borderTopWidth: 3, borderTopColor: colors.primary }]}>
+            <Ionicons name="wallet-outline" size={20} color={colors.primary} />
+            <Text style={[s.tileValue, { color: colors.primary }]}>{currency}{(monthly?.totalExpense ?? 0).toFixed(0)}</Text>
+            <Text style={s.tileLabel}>Total Spent</Text>
+          </Card>
+          <Card style={[s.tile, { borderTopWidth: 3, borderTopColor: colors.success }]}>
+            <Ionicons name="trending-down" size={20} color={colors.success} />
+            <Text style={[s.tileValue, { color: colors.success }]}>{monthly?.avgPerDay ?? 0}</Text>
+            <Text style={s.tileLabel}>Daily Average</Text>
+          </Card>
         </View>
 
-        <View style={styles.chartCard}>
-          <Text style={styles.chartTitle}>When You Smoke</Text>
-          <Text style={styles.chartSubtitle}>Last 7 days · Peak: {peakLabel}</Text>
-          <BarChart
-            data={hourly}
-            color={colors.info}
-            labelFn={(i) => i % 6 === 0 ? formatHour(i) : ''}
-            height={80}
-            colors={colors}
-          />
-        </View>
-
-        {settings && monthly && (
-          <View style={styles.savingsCard}>
-            <Text style={styles.savingsTitle}>💰 If you cut 5 per day...</Text>
-            <Text style={styles.savingsText}>
-              You'd save{' '}
-              <Text style={styles.savingsHighlight}>
-                {currency}{((5 * settings.pricePerPack / settings.cigarettesPerPack) * 30).toFixed(0)}/month
-              </Text>
-            </Text>
-            <Text style={styles.savingsText}>
-              That's{' '}
-              <Text style={styles.savingsHighlight}>
-                {currency}{((5 * settings.pricePerPack / settings.cigarettesPerPack) * 365).toFixed(0)}/year
-              </Text>
-            </Text>
+        {/* Week Comparison */}
+        <Card style={s.card}>
+          <View style={s.cardHead}>
+            <Text style={s.cardTitle}>Last 7 Days</Text>
+            {prevWeekTotal > 0 && (
+              <View style={[s.changePill, { backgroundColor: weekUp ? colors.dangerLight : colors.successLight }]}>
+                <Ionicons name={weekUp ? 'trending-up' : 'trending-down'} size={13} color={weekUp ? colors.danger : colors.success} />
+                <Text style={[s.changeText, { color: weekUp ? colors.danger : colors.success }]}>
+                  {Math.abs(weekChange)}% vs prev week
+                </Text>
+              </View>
+            )}
           </View>
+          <BarChart data={weekData} color={colors.accent} height={130} />
+          <View style={s.legend}>
+            <View style={[s.dot, { backgroundColor: colors.accent }]} />
+            <Text style={s.legendText}>Cigarettes per day</Text>
+          </View>
+        </Card>
+
+        {/* Hourly Distribution */}
+        <Card style={s.card}>
+          <View style={s.cardHead}>
+            <Text style={s.cardTitle}>Hourly Pattern</Text>
+            {peakHour >= 0 && (
+              <Text style={s.cardSub}>Peak: {peakHour}:00–{peakHour + 1}:00</Text>
+            )}
+          </View>
+          <BarChart data={hourData} color={colors.primary} height={110} />
+          <View style={s.legend}>
+            <View style={[s.dot, { backgroundColor: colors.primary }]} />
+            <Text style={s.legendText}>Smokes in last 7 days</Text>
+          </View>
+        </Card>
+
+        {/* Savings Projection */}
+        {settings && (
+          <Card style={[s.card, { backgroundColor: colors.successLight, borderColor: `${colors.success}40` }]}>
+            <View style={s.savingsRow}>
+              <View style={[s.savingsIcon, { backgroundColor: `${colors.success}25` }]}>
+                <Ionicons name="leaf" size={22} color={colors.success} />
+              </View>
+              <View style={{ flex: 1, gap: 2 }}>
+                <Text style={s.savingsTitle}>If you cut 5 cigarettes/day</Text>
+                <Text style={s.savingsSub}>
+                  Save {currency}{dailySavings}/day · {currency}{monthlySavings}/month
+                </Text>
+              </View>
+            </View>
+          </Card>
         )}
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 
-const StatTile = ({ label, value, unit, color, styles }) => (
-  <View style={styles.statTile}>
-    <Text style={[styles.statTileValue, { color }]}>{value}</Text>
-    <Text style={styles.statTileUnit}>{unit}</Text>
-    <Text style={styles.statTileLabel}>{label}</Text>
-  </View>
-);
-
-const formatHour = (h) => {
-  if (h === 0) return '12a';
-  if (h < 12) return `${h}a`;
-  if (h === 12) return '12p';
-  return `${h - 12}p`;
-};
-
-const createStyles = (colors) => StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.background },
-  scroll: { flex: 1 },
-  content: { padding: spacing.md, paddingBottom: 32 },
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background },
-
-  title: { fontSize: fontSize.xxl, fontWeight: '700', color: colors.text },
-  subtitle: { fontSize: fontSize.sm, color: colors.textSecondary, marginBottom: spacing.lg },
-
-  overviewRow: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.md },
-  statTile: {
-    flex: 1,
-    backgroundColor: colors.surface,
-    borderRadius: radius.md,
-    padding: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    alignItems: 'center',
-  },
-  statTileValue: { fontSize: fontSize.xl, fontWeight: '800' },
-  statTileUnit: { fontSize: fontSize.xs, color: colors.textMuted, marginTop: 2 },
-  statTileLabel: { fontSize: fontSize.xs, color: colors.textSecondary, marginTop: 4 },
-
-  trendCard: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.md,
-    padding: spacing.md,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    marginBottom: spacing.md,
-    borderWidth: 1,
-  },
-  trendEmoji: { fontSize: 28 },
-  trendText: { flex: 1, fontSize: fontSize.sm, color: colors.textSecondary, lineHeight: 20 },
-
-  chartCard: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.lg,
-    padding: spacing.md,
-    marginBottom: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  chartTitle: { fontSize: fontSize.lg, fontWeight: '700', color: colors.text, marginBottom: 4 },
-  chartSubtitle: { fontSize: fontSize.xs, color: colors.textSecondary, marginBottom: spacing.md },
-
-  savingsCard: {
-    backgroundColor: 'rgba(76,175,80,0.1)',
-    borderRadius: radius.lg,
-    padding: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.success,
-    gap: spacing.sm,
-  },
-  savingsTitle: { fontSize: fontSize.lg, fontWeight: '700', color: colors.text },
-  savingsText: { fontSize: fontSize.md, color: colors.textSecondary },
-  savingsHighlight: { color: colors.success, fontWeight: '700' },
+const s = StyleSheet.create({
+  root: { flex: 1, backgroundColor: colors.surface },
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  pageHeader: { padding: spacing.md, paddingBottom: spacing.sm, backgroundColor: colors.background, borderBottomWidth: 1, borderColor: colors.border },
+  pageTitle: { fontSize: fontSize.xl, fontWeight: '800', color: colors.text },
+  pageSub: { fontSize: fontSize.sm, color: colors.textSecondary },
+  content: { padding: spacing.md, gap: spacing.md, paddingBottom: 40 },
+  sectionLabel: { fontSize: fontSize.xs, fontWeight: '700', color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 1 },
+  row: { flexDirection: 'row', gap: spacing.sm },
+  tile: { flex: 1, padding: spacing.md, gap: 6, alignItems: 'flex-start' },
+  tileValue: { fontSize: fontSize.xl, fontWeight: '800' },
+  tileLabel: { fontSize: fontSize.xs, color: colors.textSecondary, fontWeight: '500' },
+  card: { padding: spacing.md, gap: spacing.md },
+  cardHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  cardTitle: { fontSize: fontSize.md, fontWeight: '700', color: colors.text },
+  cardSub: { fontSize: fontSize.xs, color: colors.textMuted },
+  changePill: { flexDirection: 'row', alignItems: 'center', gap: 4, borderRadius: radius.full, paddingHorizontal: 8, paddingVertical: 4 },
+  changeText: { fontSize: fontSize.xs, fontWeight: '600' },
+  legend: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  dot: { width: 8, height: 8, borderRadius: 4 },
+  legendText: { fontSize: fontSize.xs, color: colors.textMuted },
+  savingsRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  savingsIcon: { width: 44, height: 44, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center' },
+  savingsTitle: { fontSize: fontSize.sm, fontWeight: '700', color: colors.success },
+  savingsSub: { fontSize: fontSize.sm, color: colors.success },
 });

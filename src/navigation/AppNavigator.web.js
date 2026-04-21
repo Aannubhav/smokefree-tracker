@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
-import { ActivityIndicator, View } from 'react-native';
+import { ActivityIndicator, View, useWindowDimensions } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
 
 import { useAuth } from '../context/AuthContext';
-import { useTheme } from '../context/ThemeContext';
+import { colors, fontSize } from '../theme';
 
 import LoginScreen from '../screens/auth/LoginScreen';
 import RegisterScreen from '../screens/auth/RegisterScreen';
@@ -17,59 +17,31 @@ import SettingsScreen from '../screens/SettingsScreen';
 
 const Tab = createBottomTabNavigator();
 
-const tabIcons = {
-  Dashboard: ['flame', 'flame-outline'],
-  History: ['calendar', 'calendar-outline'],
-  Stats: ['bar-chart', 'bar-chart-outline'],
-  Analytics: ['pulse', 'pulse-outline'],
-  Settings: ['settings', 'settings-outline'],
-};
+const TABS = [
+  { name: 'Dashboard', component: DashboardScreen, icon: ['flame', 'flame-outline'] },
+  { name: 'History',   component: HistoryScreen,   icon: ['calendar', 'calendar-outline'] },
+  { name: 'Stats',     component: StatsScreen,     icon: ['bar-chart', 'bar-chart-outline'] },
+  { name: 'Analytics', component: AnalyticsScreen, icon: ['pulse', 'pulse-outline'] },
+  { name: 'Settings',  component: SettingsScreen,  icon: ['settings', 'settings-outline'] },
+];
 
-const MainTabs = () => {
-  const { colors } = useTheme();
-  return (
-    <NavigationContainer>
-      <Tab.Navigator
-        screenOptions={({ route }) => ({
-          headerShown: false,
-          tabBarStyle: {
-            backgroundColor: colors.surface,
-            borderTopColor: colors.border,
-            height: 60,
-            paddingBottom: 8,
-          },
-          tabBarActiveTintColor: colors.primary,
-          tabBarInactiveTintColor: colors.textMuted,
-          tabBarIcon: ({ focused, color, size }) => {
-            const [active, inactive] = tabIcons[route.name];
-            return <Ionicons name={focused ? active : inactive} size={size} color={color} />;
-          },
-        })}
-      >
-        <Tab.Screen name="Dashboard" component={DashboardScreen} />
-        <Tab.Screen name="History" component={HistoryScreen} />
-        <Tab.Screen name="Stats" component={StatsScreen} />
-        <Tab.Screen name="Analytics" component={AnalyticsScreen} />
-        <Tab.Screen name="Settings" component={SettingsScreen} />
-      </Tab.Navigator>
-    </NavigationContainer>
-  );
-};
+function Shell({ children }) {
+  const { width } = useWindowDimensions();
+  const isDesktop = width >= 768;
 
-// Mobile-first shell: centers content in a 480px card on wide screens
-function MobileShell({ children, colors }) {
   return (
-    <View style={{ flex: 1, backgroundColor: '#E8E8E8', alignItems: 'center', justifyContent: 'center' }}>
+    <View style={{ flex: 1, backgroundColor: isDesktop ? '#F0F4F8' : colors.background, alignItems: 'center' }}>
       <View style={{
         width: '100%',
-        maxWidth: 480,
+        maxWidth: isDesktop ? 480 : undefined,
         flex: 1,
         backgroundColor: colors.background,
-        overflow: 'hidden',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 0 },
-        shadowOpacity: 0.15,
-        shadowRadius: 24,
+        ...(isDesktop ? {
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 0 },
+          shadowOpacity: 0.12,
+          shadowRadius: 32,
+        } : {}),
       }}>
         {children}
       </View>
@@ -77,35 +49,49 @@ function MobileShell({ children, colors }) {
   );
 }
 
+function MainTabs() {
+  return (
+    <NavigationContainer>
+      <Tab.Navigator
+        screenOptions={({ route }) => {
+          const tab = TABS.find((t) => t.name === route.name);
+          return {
+            headerShown: false,
+            tabBarStyle: {
+              backgroundColor: colors.background,
+              borderTopColor: colors.border,
+              borderTopWidth: 1,
+              height: 60,
+              paddingBottom: 8,
+            },
+            tabBarActiveTintColor: colors.primary,
+            tabBarInactiveTintColor: colors.textMuted,
+            tabBarLabelStyle: { fontSize: fontSize.xs, fontWeight: '600' },
+            tabBarIcon: ({ focused, color, size }) => (
+              <Ionicons name={focused ? tab.icon[0] : tab.icon[1]} size={size} color={color} />
+            ),
+          };
+        }}
+      >
+        {TABS.map((t) => <Tab.Screen key={t.name} name={t.name} component={t.component} />)}
+      </Tab.Navigator>
+    </NavigationContainer>
+  );
+}
+
 export default function AppNavigator() {
   const { user, loading } = useAuth();
-  const { colors } = useTheme();
   const [screen, setScreen] = useState('Login');
-
-  if (loading) {
-    return (
-      <MobileShell colors={colors}>
-        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-          <ActivityIndicator size="large" color={colors.primary} />
-        </View>
-      </MobileShell>
-    );
-  }
-
-  if (!user) {
-    const nav = { navigate: (s) => setScreen(s) };
-    return (
-      <MobileShell colors={colors}>
-        {screen === 'Login'
-          ? <LoginScreen navigation={nav} />
-          : <RegisterScreen navigation={nav} />}
-      </MobileShell>
-    );
-  }
+  const nav = { navigate: (s) => setScreen(s) };
 
   return (
-    <MobileShell colors={colors}>
-      <MainTabs />
-    </MobileShell>
+    <Shell>
+      {loading
+        ? <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}><ActivityIndicator size="large" color={colors.primary} /></View>
+        : !user
+        ? screen === 'Login' ? <LoginScreen navigation={nav} /> : <RegisterScreen navigation={nav} />
+        : <MainTabs />
+      }
+    </Shell>
   );
 }

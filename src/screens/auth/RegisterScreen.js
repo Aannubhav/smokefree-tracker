@@ -1,26 +1,22 @@
-import React, { useState, useMemo } from 'react';
-import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  StyleSheet,
-  KeyboardAvoidingView,
-  Platform,
-  ActivityIndicator,
-  ScrollView,
-} from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, Platform, ActivityIndicator, ScrollView, KeyboardAvoidingView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
-import { useTheme } from '../../context/ThemeContext';
-import { spacing, radius, fontSize } from '../../theme';
+import { colors, spacing, radius, fontSize } from '../../theme';
+import Button from '../../components/ui/Button';
 import { saveSettings, DEFAULT_SETTINGS } from '../../services/smokingService';
+
+const friendly = (code) => {
+  switch (code) {
+    case 'auth/email-already-in-use': return 'This email is already registered.';
+    case 'auth/invalid-email': return 'Invalid email address.';
+    case 'auth/weak-password': return 'Password must be at least 6 characters.';
+    default: return 'Registration failed. Please try again.';
+  }
+};
 
 export default function RegisterScreen({ navigation }) {
   const { register } = useAuth();
-  const { colors } = useTheme();
-  const styles = useMemo(() => createStyles(colors), [colors]);
-
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -29,90 +25,87 @@ export default function RegisterScreen({ navigation }) {
   const [error, setError] = useState('');
 
   const handleRegister = async () => {
-    if (!name.trim() || !email.trim() || password.length < 6) {
-      setError('Name, email required. Password min 6 chars.');
-      return;
-    }
-    setError('');
-    setLoading(true);
+    if (!name.trim()) { setError('Please enter your name.'); return; }
+    if (!email.trim()) { setError('Please enter your email.'); return; }
+    if (password.length < 6) { setError('Password must be at least 6 characters.'); return; }
+    setError(''); setLoading(true);
     try {
-      const user = await register(email.trim().toLowerCase(), password, name.trim());
-      await saveSettings(user.uid, { ...DEFAULT_SETTINGS, displayName: name.trim() });
-    } catch (e) {
-      setError(friendlyError(e.code));
-    } finally {
-      setLoading(false);
-    }
+      const u = await register(email.trim().toLowerCase(), password, name.trim());
+      await saveSettings(u.uid, DEFAULT_SETTINGS);
+    } catch (e) { setError(friendly(e.code)); }
+    finally { setLoading(false); }
   };
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
-      <ScrollView contentContainerStyle={styles.inner} keyboardShouldPersistTaps="handled">
-        <View style={styles.header}>
-          <Text style={styles.emoji}>🚬</Text>
-          <Text style={styles.title}>Get Started</Text>
-          <Text style={styles.subtitle}>Create your free account</Text>
+    <KeyboardAvoidingView style={s.root} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <ScrollView contentContainerStyle={s.inner} keyboardShouldPersistTaps="handled">
+        {/* Brand */}
+        <View style={s.brand}>
+          <View style={s.logoWrap}>
+            <Ionicons name="flame" size={36} color={colors.accent} />
+          </View>
+          <Text style={s.appName}>SmokeFree</Text>
+          <Text style={s.tagline}>Start your journey today.</Text>
         </View>
 
-        <View style={styles.form}>
-          <Text style={styles.label}>Your Name</Text>
-          <TextInput
-            style={styles.input}
-            value={name}
-            onChangeText={setName}
-            placeholder="John Doe"
-            placeholderTextColor={colors.textMuted}
-          />
+        {/* Form */}
+        <View style={s.form}>
+          <Text style={s.formTitle}>Create account</Text>
 
-          <Text style={styles.label}>Email</Text>
-          <TextInput
-            style={styles.input}
-            value={email}
-            onChangeText={setEmail}
-            placeholder="you@email.com"
-            placeholderTextColor={colors.textMuted}
-            keyboardType="email-address"
-            autoCapitalize="none"
-            autoCorrect={false}
-          />
-
-          <Text style={styles.label}>Password</Text>
-          <View style={styles.passRow}>
+          <View style={s.field}>
+            <Text style={s.label}>Full Name</Text>
             <TextInput
-              style={[styles.input, { flex: 1, marginBottom: 0 }]}
-              value={password}
-              onChangeText={setPassword}
-              placeholder="Min 6 characters"
+              style={s.input}
+              value={name}
+              onChangeText={setName}
+              placeholder="Your name"
               placeholderTextColor={colors.textMuted}
-              secureTextEntry={!showPass}
+              autoCapitalize="words"
             />
-            <TouchableOpacity onPress={() => setShowPass((v) => !v)} style={styles.eye}>
-              <Ionicons
-                name={showPass ? 'eye-off-outline' : 'eye-outline'}
-                size={20}
-                color={colors.textSecondary}
-              />
-            </TouchableOpacity>
           </View>
 
-          {!!error && <Text style={styles.error}>{error}</Text>}
+          <View style={s.field}>
+            <Text style={s.label}>Email</Text>
+            <TextInput
+              style={s.input}
+              value={email}
+              onChangeText={setEmail}
+              placeholder="you@email.com"
+              placeholderTextColor={colors.textMuted}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+          </View>
 
-          <TouchableOpacity style={styles.btn} onPress={handleRegister} disabled={loading}>
-            {loading ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={styles.btnText}>Create Account</Text>
-            )}
-          </TouchableOpacity>
+          <View style={s.field}>
+            <Text style={s.label}>Password</Text>
+            <View style={s.passRow}>
+              <TextInput
+                style={[s.input, { flex: 1, marginBottom: 0 }]}
+                value={password}
+                onChangeText={setPassword}
+                placeholder="Min. 6 characters"
+                placeholderTextColor={colors.textMuted}
+                secureTextEntry={!showPass}
+              />
+              <TouchableOpacity onPress={() => setShowPass((v) => !v)} style={s.eye}>
+                <Ionicons name={showPass ? 'eye-off-outline' : 'eye-outline'} size={20} color={colors.textMuted} />
+              </TouchableOpacity>
+            </View>
+          </View>
 
-          <TouchableOpacity onPress={() => navigation.navigate('Login')}>
-            <Text style={styles.link}>
-              Already have an account?{' '}
-              <Text style={{ color: colors.primary }}>Sign In</Text>
-            </Text>
+          {!!error && (
+            <View style={s.errorBox}>
+              <Ionicons name="alert-circle-outline" size={16} color={colors.danger} />
+              <Text style={s.errorText}>{error}</Text>
+            </View>
+          )}
+
+          <Button label="Create Account" variant="primary" size="lg" fullWidth loading={loading} onPress={handleRegister} style={{ marginTop: spacing.sm }} />
+
+          <TouchableOpacity onPress={() => navigation.navigate('Login')} style={s.switchBtn}>
+            <Text style={s.switchText}>Already have an account? <Text style={{ color: colors.primary, fontWeight: '700' }}>Sign In</Text></Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -120,49 +113,25 @@ export default function RegisterScreen({ navigation }) {
   );
 }
 
-const friendlyError = (code) => {
-  switch (code) {
-    case 'auth/email-already-in-use': return 'This email is already registered.';
-    case 'auth/invalid-email': return 'Invalid email address.';
-    case 'auth/weak-password': return 'Password is too weak.';
-    default: return 'Registration failed. Please try again.';
-  }
-};
-
-const createStyles = (colors) => StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
+const s = StyleSheet.create({
+  root: { flex: 1, backgroundColor: colors.background },
   inner: { flexGrow: 1, justifyContent: 'center', padding: spacing.lg },
-  header: { alignItems: 'center', marginBottom: spacing.xl },
-  emoji: { fontSize: 56, marginBottom: spacing.sm },
-  title: { fontSize: fontSize.xxl, fontWeight: '700', color: colors.text },
-  subtitle: { fontSize: fontSize.md, color: colors.textSecondary, marginTop: 4 },
-  form: { gap: spacing.sm },
-  label: { fontSize: fontSize.sm, color: colors.textSecondary, fontWeight: '600' },
+  brand: { alignItems: 'center', marginBottom: spacing.xl },
+  logoWrap: { width: 72, height: 72, borderRadius: 24, backgroundColor: colors.accentLight, alignItems: 'center', justifyContent: 'center', marginBottom: spacing.sm },
+  appName: { fontSize: fontSize.xxl, fontWeight: '800', color: colors.text },
+  tagline: { fontSize: fontSize.sm, color: colors.textSecondary, marginTop: 4 },
+  form: { gap: spacing.md },
+  formTitle: { fontSize: fontSize.xl, fontWeight: '700', color: colors.text, marginBottom: spacing.sm },
+  field: { gap: 6 },
+  label: { fontSize: fontSize.sm, fontWeight: '600', color: colors.textSecondary },
   input: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: spacing.md,
-    color: colors.text,
-    fontSize: fontSize.md,
-    marginBottom: spacing.sm,
+    borderWidth: 1.5, borderColor: colors.border, borderRadius: radius.md,
+    padding: spacing.md, fontSize: fontSize.md, color: colors.text, backgroundColor: colors.surface,
   },
-  passRow: { flexDirection: 'row', alignItems: 'center', marginBottom: spacing.sm },
-  eye: { padding: spacing.md, marginLeft: -44 },
-  error: { color: colors.danger, fontSize: fontSize.sm, textAlign: 'center' },
-  btn: {
-    backgroundColor: colors.primary,
-    borderRadius: radius.md,
-    padding: spacing.md,
-    alignItems: 'center',
-    marginTop: spacing.sm,
-  },
-  btnText: { color: '#fff', fontSize: fontSize.lg, fontWeight: '700' },
-  link: {
-    textAlign: 'center',
-    color: colors.textSecondary,
-    fontSize: fontSize.sm,
-    marginTop: spacing.md,
-  },
+  passRow: { flexDirection: 'row', alignItems: 'center' },
+  eye: { padding: spacing.md, marginLeft: -48 },
+  errorBox: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: colors.dangerLight, padding: spacing.sm, borderRadius: radius.sm },
+  errorText: { fontSize: fontSize.sm, color: colors.danger, flex: 1 },
+  switchBtn: { alignItems: 'center', paddingVertical: spacing.sm },
+  switchText: { fontSize: fontSize.sm, color: colors.textSecondary },
 });
