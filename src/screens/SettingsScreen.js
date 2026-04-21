@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -15,13 +15,17 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 
 import { useAuth } from '../context/AuthContext';
-import { theme } from '../theme';
+import { useTheme } from '../context/ThemeContext';
+import { spacing, radius, fontSize } from '../theme';
 import { getSettings, saveSettings } from '../services/smokingService';
 
 const CURRENCIES = ['₹', '$', '€', '£', '¥'];
 
 export default function SettingsScreen() {
   const { user, logout } = useAuth();
+  const { colors, isDark, toggleTheme } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   const [settings, setSettings] = useState(null);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -78,7 +82,7 @@ export default function SettingsScreen() {
   if (loading || !settings) {
     return (
       <View style={styles.center}>
-        <ActivityIndicator size="large" color={theme.colors.primary} />
+        <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
   }
@@ -105,30 +109,43 @@ export default function SettingsScreen() {
           </View>
         </View>
 
+        {/* Appearance */}
+        <Text style={styles.sectionTitle}>Appearance</Text>
+        <View style={styles.card}>
+          <Row label="Dark Mode" styles={styles}>
+            <Switch
+              value={isDark}
+              onValueChange={toggleTheme}
+              trackColor={{ false: colors.border, true: colors.primary }}
+              thumbColor={isDark ? '#fff' : colors.textMuted}
+            />
+          </Row>
+        </View>
+
         {/* Cigarette settings */}
         <Text style={styles.sectionTitle}>Cigarette Pricing</Text>
         <View style={styles.card}>
-          <Row label="Price per Pack">
+          <Row label="Price per Pack" styles={styles}>
             <TextInput
               style={styles.numInput}
               value={String(settings.pricePerPack)}
               onChangeText={(v) => setSettings((s) => ({ ...s, pricePerPack: v }))}
               keyboardType="numeric"
-              placeholderTextColor={theme.colors.textMuted}
+              placeholderTextColor={colors.textMuted}
             />
           </Row>
-          <Divider />
-          <Row label="Cigarettes per Pack">
+          <Divider colors={colors} />
+          <Row label="Cigarettes per Pack" styles={styles}>
             <TextInput
               style={styles.numInput}
               value={String(settings.cigarettesPerPack)}
               onChangeText={(v) => setSettings((s) => ({ ...s, cigarettesPerPack: v }))}
               keyboardType="numeric"
-              placeholderTextColor={theme.colors.textMuted}
+              placeholderTextColor={colors.textMuted}
             />
           </Row>
-          <Divider />
-          <Row label="Currency">
+          <Divider colors={colors} />
+          <Row label="Currency" styles={styles}>
             <View style={styles.currencyRow}>
               {CURRENCIES.map((c) => (
                 <TouchableOpacity
@@ -146,10 +163,10 @@ export default function SettingsScreen() {
         </View>
 
         <View style={styles.calcHint}>
-          <Ionicons name="calculator-outline" size={14} color={theme.colors.textMuted} />
+          <Ionicons name="calculator-outline" size={14} color={colors.textMuted} />
           <Text style={styles.calcText}>
             Cost per cigarette:{' '}
-            <Text style={{ color: theme.colors.primary }}>
+            <Text style={{ color: colors.primary }}>
               {settings.currency}{isNaN(parseFloat(costPerCig)) ? '–' : costPerCig}
             </Text>
           </Text>
@@ -167,9 +184,9 @@ export default function SettingsScreen() {
         <Text style={styles.sectionTitle}>Account</Text>
         <View style={styles.card}>
           <TouchableOpacity style={styles.accountRow} onPress={handleLogout}>
-            <Ionicons name="log-out-outline" size={20} color={theme.colors.danger} />
+            <Ionicons name="log-out-outline" size={20} color={colors.danger} />
             <Text style={styles.accountRowText}>Sign Out</Text>
-            <Ionicons name="chevron-forward" size={16} color={theme.colors.textMuted} />
+            <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
           </TouchableOpacity>
         </View>
 
@@ -179,98 +196,97 @@ export default function SettingsScreen() {
   );
 }
 
-const Row = ({ label, children }) => (
+const Row = ({ label, children, styles }) => (
   <View style={styles.row}>
     <Text style={styles.rowLabel}>{label}</Text>
     {children}
   </View>
 );
 
-const Divider = () => <View style={styles.divider} />;
+const Divider = ({ colors }) => <View style={{ height: 1, backgroundColor: colors.border }} />;
 
-const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: theme.colors.background },
+const createStyles = (colors) => StyleSheet.create({
+  safe: { flex: 1, backgroundColor: colors.background },
   scroll: { flex: 1 },
-  content: { padding: theme.spacing.md, paddingBottom: 48 },
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: theme.colors.background },
+  content: { padding: spacing.md, paddingBottom: 48 },
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background },
 
-  title: { fontSize: theme.fontSize.xxl, fontWeight: '700', color: theme.colors.text, marginBottom: theme.spacing.lg },
+  title: { fontSize: fontSize.xxl, fontWeight: '700', color: colors.text, marginBottom: spacing.lg },
 
   profileCard: {
-    backgroundColor: theme.colors.surface,
-    borderRadius: theme.radius.lg,
-    padding: theme.spacing.md,
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    padding: spacing.md,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: theme.spacing.md,
-    marginBottom: theme.spacing.lg,
+    gap: spacing.md,
+    marginBottom: spacing.lg,
     borderWidth: 1,
-    borderColor: theme.colors.border,
+    borderColor: colors.border,
   },
   avatar: {
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: theme.colors.primary,
+    backgroundColor: colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  avatarText: { fontSize: theme.fontSize.xl, fontWeight: '700', color: '#fff' },
-  profileName: { fontSize: theme.fontSize.lg, fontWeight: '600', color: theme.colors.text },
-  profileEmail: { fontSize: theme.fontSize.sm, color: theme.colors.textSecondary },
+  avatarText: { fontSize: fontSize.xl, fontWeight: '700', color: '#fff' },
+  profileName: { fontSize: fontSize.lg, fontWeight: '600', color: colors.text },
+  profileEmail: { fontSize: fontSize.sm, color: colors.textSecondary },
 
-  sectionTitle: { fontSize: theme.fontSize.sm, fontWeight: '600', color: theme.colors.textSecondary, marginBottom: theme.spacing.sm, textTransform: 'uppercase', letterSpacing: 1 },
+  sectionTitle: { fontSize: fontSize.sm, fontWeight: '600', color: colors.textSecondary, marginBottom: spacing.sm, textTransform: 'uppercase', letterSpacing: 1 },
   card: {
-    backgroundColor: theme.colors.surface,
-    borderRadius: theme.radius.lg,
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
     borderWidth: 1,
-    borderColor: theme.colors.border,
+    borderColor: colors.border,
     overflow: 'hidden',
-    marginBottom: theme.spacing.sm,
+    marginBottom: spacing.sm,
   },
-  row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: theme.spacing.md },
-  rowLabel: { fontSize: theme.fontSize.md, color: theme.colors.text },
-  divider: { height: 1, backgroundColor: theme.colors.border },
+  row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: spacing.md },
+  rowLabel: { fontSize: fontSize.md, color: colors.text },
   numInput: {
-    backgroundColor: theme.colors.surfaceHigh,
-    borderRadius: theme.radius.sm,
-    padding: theme.spacing.sm,
-    color: theme.colors.text,
-    fontSize: theme.fontSize.md,
+    backgroundColor: colors.surfaceHigh,
+    borderRadius: radius.sm,
+    padding: spacing.sm,
+    color: colors.text,
+    fontSize: fontSize.md,
     textAlign: 'right',
     minWidth: 80,
     borderWidth: 1,
-    borderColor: theme.colors.border,
+    borderColor: colors.border,
   },
-  currencyRow: { flexDirection: 'row', gap: theme.spacing.xs },
+  currencyRow: { flexDirection: 'row', gap: spacing.xs },
   currencyBtn: {
     width: 34,
     height: 34,
-    borderRadius: theme.radius.full,
+    borderRadius: radius.full,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: theme.colors.border,
-    backgroundColor: theme.colors.surfaceHigh,
+    borderColor: colors.border,
+    backgroundColor: colors.surfaceHigh,
   },
-  currencyBtnActive: { borderColor: theme.colors.primary, backgroundColor: 'rgba(255,107,53,0.15)' },
-  currencyText: { fontSize: theme.fontSize.md, color: theme.colors.textSecondary },
-  currencyTextActive: { color: theme.colors.primary, fontWeight: '700' },
+  currencyBtnActive: { borderColor: colors.primary, backgroundColor: 'rgba(255,107,53,0.15)' },
+  currencyText: { fontSize: fontSize.md, color: colors.textSecondary },
+  currencyTextActive: { color: colors.primary, fontWeight: '700' },
 
-  calcHint: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: theme.spacing.md, paddingHorizontal: 4 },
-  calcText: { fontSize: theme.fontSize.sm, color: theme.colors.textMuted },
+  calcHint: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: spacing.md, paddingHorizontal: 4 },
+  calcText: { fontSize: fontSize.sm, color: colors.textMuted },
 
   saveBtn: {
-    backgroundColor: theme.colors.primary,
-    borderRadius: theme.radius.md,
-    padding: theme.spacing.md,
+    backgroundColor: colors.primary,
+    borderRadius: radius.md,
+    padding: spacing.md,
     alignItems: 'center',
-    marginBottom: theme.spacing.xl,
+    marginBottom: spacing.xl,
   },
-  saveBtnText: { color: '#fff', fontSize: theme.fontSize.lg, fontWeight: '700' },
+  saveBtnText: { color: '#fff', fontSize: fontSize.lg, fontWeight: '700' },
 
-  accountRow: { flexDirection: 'row', alignItems: 'center', padding: theme.spacing.md, gap: theme.spacing.md },
-  accountRowText: { flex: 1, fontSize: theme.fontSize.md, color: theme.colors.danger },
+  accountRow: { flexDirection: 'row', alignItems: 'center', padding: spacing.md, gap: spacing.md },
+  accountRowText: { flex: 1, fontSize: fontSize.md, color: colors.danger },
 
-  version: { textAlign: 'center', fontSize: theme.fontSize.xs, color: theme.colors.textMuted, marginTop: theme.spacing.md },
+  version: { textAlign: 'center', fontSize: fontSize.xs, color: colors.textMuted, marginTop: spacing.md },
 });

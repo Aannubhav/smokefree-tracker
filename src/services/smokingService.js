@@ -17,6 +17,7 @@ import { db } from '../config/firebase';
 import { format, subDays } from 'date-fns';
 
 const smokesCol = (userId) => collection(db, 'users', userId, 'smokes');
+const urgesCol = (userId) => collection(db, 'users', userId, 'urges');
 const summaryDoc = (userId, date) => doc(db, 'users', userId, 'dailySummary', date);
 const settingsDoc = (userId) => doc(db, 'users', userId, 'settings', 'prefs');
 
@@ -75,6 +76,20 @@ export const logSmoke = async (userId, { note = '', trigger = '' } = {}) => {
   }
 };
 
+// ─── Log an urge (resisted) ───────────────────────────────────────────────────
+
+export const logUrge = async (userId, { note = '', trigger = '' } = {}) => {
+  const now = new Date();
+  const entry = {
+    timestamp: Timestamp.fromDate(now),
+    date: format(now, 'yyyy-MM-dd'),
+    hour: now.getHours(),
+    note,
+    trigger,
+  };
+  await addDoc(urgesCol(userId), entry);
+};
+
 // ─── Delete a smoke entry ────────────────────────────────────────────────────
 
 export const deleteSmoke = async (userId, smokeId, dateStr) => {
@@ -100,6 +115,19 @@ export const getTodaySmokes = async (userId) => {
   const today = format(new Date(), 'yyyy-MM-dd');
   const q = query(
     smokesCol(userId),
+    where('date', '==', today),
+    orderBy('timestamp', 'desc')
+  );
+  const snap = await getDocs(q);
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+};
+
+// ─── Fetch today's urges ─────────────────────────────────────────────────────
+
+export const getTodayUrges = async (userId) => {
+  const today = format(new Date(), 'yyyy-MM-dd');
+  const q = query(
+    urgesCol(userId),
     where('date', '==', today),
     orderBy('timestamp', 'desc')
   );
@@ -144,6 +172,30 @@ export const getSmokesForDate = async (userId, dateStr) => {
   return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
 };
 
+// ─── Urge counts for last N days ─────────────────────────────────────────────
+
+export const getUrgeCountsForDays = async (userId, days = 7) => {
+  const startDate = format(subDays(new Date(), days - 1), 'yyyy-MM-dd');
+  const q = query(
+    urgesCol(userId),
+    where('date', '>=', startDate),
+    orderBy('date', 'asc'),
+    limit(500)
+  );
+  const snap = await getDocs(q);
+
+  const countMap = {};
+  snap.docs.forEach((d) => {
+    const { date } = d.data();
+    countMap[date] = (countMap[date] || 0) + 1;
+  });
+
+  return Array.from({ length: days }, (_, i) => {
+    const dateStr = format(subDays(new Date(), days - 1 - i), 'yyyy-MM-dd');
+    return { date: dateStr, count: countMap[dateStr] || 0 };
+  });
+};
+
 // ─── Stats helpers ────────────────────────────────────────────────────────────
 
 export const getHourlyDistribution = async (userId) => {
@@ -152,6 +204,24 @@ export const getHourlyDistribution = async (userId) => {
 
   const q = query(
     smokesCol(userId),
+    where('date', '>=', sevenDaysAgo),
+    orderBy('date', 'asc'),
+    limit(500)
+  );
+  const snap = await getDocs(q);
+  snap.docs.forEach((d) => {
+    const hour = d.data().hour ?? 0;
+    counts[hour] = (counts[hour] || 0) + 1;
+  });
+  return counts;
+};
+
+export const getUrgeHourlyDistribution = async (userId) => {
+  const counts = new Array(24).fill(0);
+  const sevenDaysAgo = format(subDays(new Date(), 7), 'yyyy-MM-dd');
+
+  const q = query(
+    urgesCol(userId),
     where('date', '>=', sevenDaysAgo),
     orderBy('date', 'asc'),
     limit(500)

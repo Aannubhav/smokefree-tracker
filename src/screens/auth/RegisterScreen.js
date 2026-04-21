@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -12,11 +12,15 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
+import { useTheme } from '../../context/ThemeContext';
+import { spacing, radius, fontSize } from '../../theme';
 import { saveSettings, DEFAULT_SETTINGS } from '../../services/smokingService';
-import { theme } from '../../theme';
 
 export default function RegisterScreen({ navigation }) {
   const { register } = useAuth();
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -60,7 +64,7 @@ export default function RegisterScreen({ navigation }) {
             value={name}
             onChangeText={setName}
             placeholder="John Doe"
-            placeholderTextColor={theme.colors.textMuted}
+            placeholderTextColor={colors.textMuted}
           />
 
           <Text style={styles.label}>Email</Text>
@@ -69,7 +73,7 @@ export default function RegisterScreen({ navigation }) {
             value={email}
             onChangeText={setEmail}
             placeholder="you@email.com"
-            placeholderTextColor={theme.colors.textMuted}
+            placeholderTextColor={colors.textMuted}
             keyboardType="email-address"
             autoCapitalize="none"
             autoCorrect={false}
@@ -82,14 +86,14 @@ export default function RegisterScreen({ navigation }) {
               value={password}
               onChangeText={setPassword}
               placeholder="Min 6 characters"
-              placeholderTextColor={theme.colors.textMuted}
+              placeholderTextColor={colors.textMuted}
               secureTextEntry={!showPass}
             />
             <TouchableOpacity onPress={() => setShowPass((v) => !v)} style={styles.eye}>
               <Ionicons
                 name={showPass ? 'eye-off-outline' : 'eye-outline'}
                 size={20}
-                color={theme.colors.textSecondary}
+                color={colors.textSecondary}
               />
             </TouchableOpacity>
           </View>
@@ -107,7 +111,7 @@ export default function RegisterScreen({ navigation }) {
           <TouchableOpacity onPress={() => navigation.navigate('Login')}>
             <Text style={styles.link}>
               Already have an account?{' '}
-              <Text style={{ color: theme.colors.primary }}>Sign In</Text>
+              <Text style={{ color: colors.primary }}>Sign In</Text>
             </Text>
           </TouchableOpacity>
         </View>
@@ -125,40 +129,40 @@ const friendlyError = (code) => {
   }
 };
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: theme.colors.background },
-  inner: { flexGrow: 1, justifyContent: 'center', padding: theme.spacing.lg },
-  header: { alignItems: 'center', marginBottom: theme.spacing.xl },
-  emoji: { fontSize: 56, marginBottom: theme.spacing.sm },
-  title: { fontSize: theme.fontSize.xxl, fontWeight: '700', color: theme.colors.text },
-  subtitle: { fontSize: theme.fontSize.md, color: theme.colors.textSecondary, marginTop: 4 },
-  form: { gap: theme.spacing.sm },
-  label: { fontSize: theme.fontSize.sm, color: theme.colors.textSecondary, fontWeight: '600' },
+const createStyles = (colors) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.background },
+  inner: { flexGrow: 1, justifyContent: 'center', padding: spacing.lg },
+  header: { alignItems: 'center', marginBottom: spacing.xl },
+  emoji: { fontSize: 56, marginBottom: spacing.sm },
+  title: { fontSize: fontSize.xxl, fontWeight: '700', color: colors.text },
+  subtitle: { fontSize: fontSize.md, color: colors.textSecondary, marginTop: 4 },
+  form: { gap: spacing.sm },
+  label: { fontSize: fontSize.sm, color: colors.textSecondary, fontWeight: '600' },
   input: {
-    backgroundColor: theme.colors.surface,
-    borderRadius: theme.radius.md,
+    backgroundColor: colors.surface,
+    borderRadius: radius.md,
     borderWidth: 1,
-    borderColor: theme.colors.border,
-    padding: theme.spacing.md,
-    color: theme.colors.text,
-    fontSize: theme.fontSize.md,
-    marginBottom: theme.spacing.sm,
+    borderColor: colors.border,
+    padding: spacing.md,
+    color: colors.text,
+    fontSize: fontSize.md,
+    marginBottom: spacing.sm,
   },
-  passRow: { flexDirection: 'row', alignItems: 'center', marginBottom: theme.spacing.sm },
-  eye: { padding: theme.spacing.md, marginLeft: -44 },
-  error: { color: theme.colors.danger, fontSize: theme.fontSize.sm, textAlign: 'center' },
+  passRow: { flexDirection: 'row', alignItems: 'center', marginBottom: spacing.sm },
+  eye: { padding: spacing.md, marginLeft: -44 },
+  error: { color: colors.danger, fontSize: fontSize.sm, textAlign: 'center' },
   btn: {
-    backgroundColor: theme.colors.primary,
-    borderRadius: theme.radius.md,
-    padding: theme.spacing.md,
+    backgroundColor: colors.primary,
+    borderRadius: radius.md,
+    padding: spacing.md,
     alignItems: 'center',
-    marginTop: theme.spacing.sm,
+    marginTop: spacing.sm,
   },
-  btnText: { color: '#fff', fontSize: theme.fontSize.lg, fontWeight: '700' },
+  btnText: { color: '#fff', fontSize: fontSize.lg, fontWeight: '700' },
   link: {
     textAlign: 'center',
-    color: theme.colors.textSecondary,
-    fontSize: theme.fontSize.sm,
-    marginTop: theme.spacing.md,
+    color: colors.textSecondary,
+    fontSize: fontSize.sm,
+    marginTop: spacing.md,
   },
 });

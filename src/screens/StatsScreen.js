@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -6,14 +6,14 @@ import {
   StyleSheet,
   ActivityIndicator,
   RefreshControl,
-  Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { format, subDays, parseISO } from 'date-fns';
 
 import { useAuth } from '../context/AuthContext';
-import { theme } from '../theme';
+import { useTheme } from '../context/ThemeContext';
+import { spacing, radius, fontSize } from '../theme';
 import {
   getRecentSummaries,
   getMonthlyTotal,
@@ -21,9 +21,7 @@ import {
   getSettings,
 } from '../services/smokingService';
 
-const W = Dimensions.get('window').width;
-
-const BarChart = ({ data, maxVal, labelFn, color, height = 120 }) => {
+const BarChart = ({ data, maxVal, labelFn, color, height = 120, colors }) => {
   if (!data || data.length === 0) return null;
   const max = maxVal || Math.max(...data, 1);
   return (
@@ -35,7 +33,7 @@ const BarChart = ({ data, maxVal, labelFn, color, height = 120 }) => {
               style={{
                 width: '80%',
                 height: Math.max(2, (val / max) * height),
-                backgroundColor: val === 0 ? theme.colors.border : color,
+                backgroundColor: val === 0 ? colors.border : color,
                 borderRadius: 3,
               }}
             />
@@ -46,7 +44,7 @@ const BarChart = ({ data, maxVal, labelFn, color, height = 120 }) => {
         {data.map((_, i) => (
           <Text
             key={i}
-            style={{ flex: 1, textAlign: 'center', fontSize: 9, color: theme.colors.textMuted }}
+            style={{ flex: 1, textAlign: 'center', fontSize: 9, color: colors.textMuted }}
             numberOfLines={1}
           >
             {labelFn(i)}
@@ -59,6 +57,9 @@ const BarChart = ({ data, maxVal, labelFn, color, height = 120 }) => {
 
 export default function StatsScreen() {
   const { user } = useAuth();
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   const [weekly, setWeekly] = useState([]);
   const [hourly, setHourly] = useState([]);
   const [monthly, setMonthly] = useState(null);
@@ -108,7 +109,7 @@ export default function StatsScreen() {
   if (loading) {
     return (
       <View style={styles.center}>
-        <ActivityIndicator size="large" color={theme.colors.primary} />
+        <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
   }
@@ -122,29 +123,27 @@ export default function StatsScreen() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={() => { setRefreshing(true); load(); }}
-            tintColor={theme.colors.primary}
+            tintColor={colors.primary}
           />
         }
       >
         <Text style={styles.title}>Statistics</Text>
         <Text style={styles.subtitle}>Insights into your habits</Text>
 
-        {/* Monthly overview */}
         {monthly && (
           <View style={styles.overviewRow}>
-            <StatTile icon="flame" label="This Month" value={monthly.totalSmokes} unit="smokes" color={theme.colors.primary} />
-            <StatTile icon="cash-outline" label="Spent" value={`${currency}${monthly.totalExpense.toFixed(0)}`} unit="30 days" color="#2196F3" />
-            <StatTile icon="trending-down-outline" label="Daily Avg" value={monthly.avgPerDay} unit="per day" color={theme.colors.warning} />
+            <StatTile icon="flame" label="This Month" value={monthly.totalSmokes} unit="smokes" color={colors.primary} styles={styles} />
+            <StatTile icon="cash-outline" label="Spent" value={`${currency}${monthly.totalExpense.toFixed(0)}`} unit="30 days" color={colors.info} styles={styles} />
+            <StatTile icon="trending-down-outline" label="Daily Avg" value={monthly.avgPerDay} unit="per day" color={colors.warning} styles={styles} />
           </View>
         )}
 
-        {/* Trend */}
         {trend !== null && (
-          <View style={[styles.trendCard, { borderColor: trend > 0 ? theme.colors.danger : theme.colors.success }]}>
+          <View style={[styles.trendCard, { borderColor: trend > 0 ? colors.danger : colors.success }]}>
             <Text style={styles.trendEmoji}>{trend > 0 ? '📈' : '📉'}</Text>
             <Text style={styles.trendText}>
               You're smoking{' '}
-              <Text style={{ color: trend > 0 ? theme.colors.danger : theme.colors.success, fontWeight: '700' }}>
+              <Text style={{ color: trend > 0 ? colors.danger : colors.success, fontWeight: '700' }}>
                 {Math.abs(trend).toFixed(0)}% {trend > 0 ? 'more' : 'less'}
               </Text>
               {' '}compared to the start of this week.
@@ -152,30 +151,29 @@ export default function StatsScreen() {
           </View>
         )}
 
-        {/* Weekly chart */}
         <View style={styles.chartCard}>
           <Text style={styles.chartTitle}>Last 7 Days</Text>
           <BarChart
             data={weekly.map((d) => d.count)}
-            color={theme.colors.primary}
+            color={colors.primary}
             labelFn={(i) => weekly[i] ? format(parseISO(weekly[i].date), 'EEE') : ''}
             height={100}
+            colors={colors}
           />
         </View>
 
-        {/* Hourly distribution */}
         <View style={styles.chartCard}>
           <Text style={styles.chartTitle}>When You Smoke</Text>
           <Text style={styles.chartSubtitle}>Last 7 days · Peak: {peakLabel}</Text>
           <BarChart
             data={hourly}
-            color="#2196F3"
+            color={colors.info}
             labelFn={(i) => i % 6 === 0 ? formatHour(i) : ''}
             height={80}
+            colors={colors}
           />
         </View>
 
-        {/* Savings potential */}
         {settings && monthly && (
           <View style={styles.savingsCard}>
             <Text style={styles.savingsTitle}>💰 If you cut 5 per day...</Text>
@@ -198,7 +196,7 @@ export default function StatsScreen() {
   );
 }
 
-const StatTile = ({ icon, label, value, unit, color }) => (
+const StatTile = ({ label, value, unit, color, styles }) => (
   <View style={styles.statTile}>
     <Text style={[styles.statTileValue, { color }]}>{value}</Text>
     <Text style={styles.statTileUnit}>{unit}</Text>
@@ -213,62 +211,62 @@ const formatHour = (h) => {
   return `${h - 12}p`;
 };
 
-const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: theme.colors.background },
+const createStyles = (colors) => StyleSheet.create({
+  safe: { flex: 1, backgroundColor: colors.background },
   scroll: { flex: 1 },
-  content: { padding: theme.spacing.md, paddingBottom: 32 },
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: theme.colors.background },
+  content: { padding: spacing.md, paddingBottom: 32 },
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background },
 
-  title: { fontSize: theme.fontSize.xxl, fontWeight: '700', color: theme.colors.text },
-  subtitle: { fontSize: theme.fontSize.sm, color: theme.colors.textSecondary, marginBottom: theme.spacing.lg },
+  title: { fontSize: fontSize.xxl, fontWeight: '700', color: colors.text },
+  subtitle: { fontSize: fontSize.sm, color: colors.textSecondary, marginBottom: spacing.lg },
 
-  overviewRow: { flexDirection: 'row', gap: theme.spacing.sm, marginBottom: theme.spacing.md },
+  overviewRow: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.md },
   statTile: {
     flex: 1,
-    backgroundColor: theme.colors.surface,
-    borderRadius: theme.radius.md,
-    padding: theme.spacing.md,
+    backgroundColor: colors.surface,
+    borderRadius: radius.md,
+    padding: spacing.md,
     borderWidth: 1,
-    borderColor: theme.colors.border,
+    borderColor: colors.border,
     alignItems: 'center',
   },
-  statTileValue: { fontSize: theme.fontSize.xl, fontWeight: '800' },
-  statTileUnit: { fontSize: theme.fontSize.xs, color: theme.colors.textMuted, marginTop: 2 },
-  statTileLabel: { fontSize: theme.fontSize.xs, color: theme.colors.textSecondary, marginTop: 4 },
+  statTileValue: { fontSize: fontSize.xl, fontWeight: '800' },
+  statTileUnit: { fontSize: fontSize.xs, color: colors.textMuted, marginTop: 2 },
+  statTileLabel: { fontSize: fontSize.xs, color: colors.textSecondary, marginTop: 4 },
 
   trendCard: {
-    backgroundColor: theme.colors.surface,
-    borderRadius: theme.radius.md,
-    padding: theme.spacing.md,
+    backgroundColor: colors.surface,
+    borderRadius: radius.md,
+    padding: spacing.md,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: theme.spacing.md,
-    marginBottom: theme.spacing.md,
+    gap: spacing.md,
+    marginBottom: spacing.md,
     borderWidth: 1,
   },
   trendEmoji: { fontSize: 28 },
-  trendText: { flex: 1, fontSize: theme.fontSize.sm, color: theme.colors.textSecondary, lineHeight: 20 },
+  trendText: { flex: 1, fontSize: fontSize.sm, color: colors.textSecondary, lineHeight: 20 },
 
   chartCard: {
-    backgroundColor: theme.colors.surface,
-    borderRadius: theme.radius.lg,
-    padding: theme.spacing.md,
-    marginBottom: theme.spacing.md,
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    marginBottom: spacing.md,
     borderWidth: 1,
-    borderColor: theme.colors.border,
+    borderColor: colors.border,
   },
-  chartTitle: { fontSize: theme.fontSize.lg, fontWeight: '700', color: theme.colors.text, marginBottom: 4 },
-  chartSubtitle: { fontSize: theme.fontSize.xs, color: theme.colors.textSecondary, marginBottom: theme.spacing.md },
+  chartTitle: { fontSize: fontSize.lg, fontWeight: '700', color: colors.text, marginBottom: 4 },
+  chartSubtitle: { fontSize: fontSize.xs, color: colors.textSecondary, marginBottom: spacing.md },
 
   savingsCard: {
     backgroundColor: 'rgba(76,175,80,0.1)',
-    borderRadius: theme.radius.lg,
-    padding: theme.spacing.md,
+    borderRadius: radius.lg,
+    padding: spacing.md,
     borderWidth: 1,
-    borderColor: theme.colors.success,
-    gap: theme.spacing.sm,
+    borderColor: colors.success,
+    gap: spacing.sm,
   },
-  savingsTitle: { fontSize: theme.fontSize.lg, fontWeight: '700', color: theme.colors.text },
-  savingsText: { fontSize: theme.fontSize.md, color: theme.colors.textSecondary },
-  savingsHighlight: { color: theme.colors.success, fontWeight: '700' },
+  savingsTitle: { fontSize: fontSize.lg, fontWeight: '700', color: colors.text },
+  savingsText: { fontSize: fontSize.md, color: colors.textSecondary },
+  savingsHighlight: { color: colors.success, fontWeight: '700' },
 });

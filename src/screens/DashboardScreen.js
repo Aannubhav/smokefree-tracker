@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -19,9 +19,11 @@ import { format, formatDistanceToNow } from 'date-fns';
 import { useFocusEffect } from '@react-navigation/native';
 
 import { useAuth } from '../context/AuthContext';
-import { theme } from '../theme';
+import { useTheme } from '../context/ThemeContext';
+import { spacing, radius, fontSize } from '../theme';
 import {
   logSmoke,
+  logUrge,
   deleteSmoke,
   getTodaySmokes,
   getTodaySummary,
@@ -32,6 +34,9 @@ const TRIGGERS = ['Stress', 'Boredom', 'After eating', 'Coffee', 'Social', 'Anxi
 
 export default function DashboardScreen() {
   const { user } = useAuth();
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   const [summary, setSummary] = useState({ count: 0, totalExpense: 0 });
   const [smokes, setSmokes] = useState([]);
   const [settings, setSettings] = useState(null);
@@ -39,6 +44,7 @@ export default function DashboardScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [logging, setLogging] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
+  const [modalType, setModalType] = useState('smoke'); // 'smoke' | 'urge'
   const [note, setNote] = useState('');
   const [trigger, setTrigger] = useState('');
   const [timeSinceLast, setTimeSinceLast] = useState('');
@@ -89,12 +95,16 @@ export default function DashboardScreen() {
     setLogging(true);
     setModalVisible(false);
     try {
-      await logSmoke(user.uid, { note: note.trim(), trigger });
+      if (modalType === 'smoke') {
+        await logSmoke(user.uid, { note: note.trim(), trigger });
+      } else {
+        await logUrge(user.uid, { note: note.trim(), trigger });
+      }
       setNote('');
       setTrigger('');
       await load();
     } catch (e) {
-      Alert.alert('Error', 'Failed to log smoke. Check your connection.');
+      Alert.alert('Error', 'Failed to log entry. Check your connection.');
     } finally {
       setLogging(false);
     }
@@ -114,9 +124,10 @@ export default function DashboardScreen() {
     ]);
   };
 
-  const openModal = () => {
+  const openModal = (type) => {
     setNote('');
     setTrigger('');
+    setModalType(type);
     setModalVisible(true);
   };
 
@@ -134,17 +145,19 @@ export default function DashboardScreen() {
   if (loading) {
     return (
       <View style={styles.center}>
-        <ActivityIndicator size="large" color={theme.colors.primary} />
+        <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
   }
+
+  const isUrge = modalType === 'urge';
 
   return (
     <SafeAreaView style={styles.safe}>
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={styles.content}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} tintColor={theme.colors.primary} />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} tintColor={colors.primary} />}
       >
         {/* Header */}
         <View style={styles.headerRow}>
@@ -189,7 +202,7 @@ export default function DashboardScreen() {
         {/* Log Smoke Button */}
         <TouchableOpacity
           style={[styles.logBtn, logging && styles.logBtnDisabled]}
-          onPress={openModal}
+          onPress={() => openModal('smoke')}
           disabled={logging}
           activeOpacity={0.8}
         >
@@ -197,10 +210,21 @@ export default function DashboardScreen() {
             <ActivityIndicator color="#fff" size="large" />
           ) : (
             <>
-              <Ionicons name="add-circle" size={32} color="#fff" />
+              <Ionicons name="flame" size={28} color="#fff" />
               <Text style={styles.logBtnText}>I Just Smoked</Text>
             </>
           )}
+        </TouchableOpacity>
+
+        {/* Log Urge Button */}
+        <TouchableOpacity
+          style={[styles.urgeBtn, logging && styles.logBtnDisabled]}
+          onPress={() => openModal('urge')}
+          disabled={logging}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="shield-checkmark-outline" size={22} color={colors.success} />
+          <Text style={styles.urgeBtnText}>I Resisted an Urge!</Text>
         </TouchableOpacity>
 
         {/* Today's log */}
@@ -232,7 +256,7 @@ export default function DashboardScreen() {
                   </View>
                 </View>
                 <TouchableOpacity onPress={() => handleDelete(s.id, s.date)} style={styles.deleteBtn}>
-                  <Ionicons name="trash-outline" size={16} color={theme.colors.textMuted} />
+                  <Ionicons name="trash-outline" size={16} color={colors.textMuted} />
                 </TouchableOpacity>
               </View>
             );
@@ -240,7 +264,7 @@ export default function DashboardScreen() {
         )}
       </ScrollView>
 
-      {/* Log Smoke Modal */}
+      {/* Log Modal */}
       <Modal
         visible={modalVisible}
         transparent
@@ -250,17 +274,21 @@ export default function DashboardScreen() {
         <View style={styles.modalOverlay}>
           <View style={styles.modalSheet}>
             <View style={styles.modalHandle} />
-            <Text style={styles.modalTitle}>Log a Smoke</Text>
-            <Text style={styles.modalSubtitle}>What triggered the urge?</Text>
+            <Text style={styles.modalTitle}>
+              {isUrge ? '💪 Log an Urge Resisted' : '🚬 Log a Smoke'}
+            </Text>
+            <Text style={styles.modalSubtitle}>
+              {isUrge ? 'What triggered the urge?' : 'What triggered the urge to smoke?'}
+            </Text>
 
             <View style={styles.triggerGrid}>
               {TRIGGERS.map((t) => (
                 <TouchableOpacity
                   key={t}
-                  style={[styles.triggerChip, trigger === t && styles.triggerChipActive]}
+                  style={[styles.triggerChip, trigger === t && (isUrge ? styles.triggerChipUrge : styles.triggerChipActive)]}
                   onPress={() => setTrigger(trigger === t ? '' : t)}
                 >
-                  <Text style={[styles.triggerChipText, trigger === t && styles.triggerChipTextActive]}>
+                  <Text style={[styles.triggerChipText, trigger === t && (isUrge ? styles.triggerChipTextUrge : styles.triggerChipTextActive)]}>
                     {t}
                   </Text>
                 </TouchableOpacity>
@@ -272,14 +300,19 @@ export default function DashboardScreen() {
               value={note}
               onChangeText={setNote}
               placeholder="Optional note…"
-              placeholderTextColor={theme.colors.textMuted}
+              placeholderTextColor={colors.textMuted}
               multiline
               maxLength={140}
             />
 
-            <TouchableOpacity style={styles.modalLogBtn} onPress={handleLogSmoke}>
-              <Ionicons name="flame" size={20} color="#fff" />
-              <Text style={styles.modalLogBtnText}>Log Smoke</Text>
+            <TouchableOpacity
+              style={[styles.modalLogBtn, isUrge && styles.modalLogBtnUrge]}
+              onPress={handleLogSmoke}
+            >
+              <Ionicons name={isUrge ? 'shield-checkmark' : 'flame'} size={20} color="#fff" />
+              <Text style={styles.modalLogBtnText}>
+                {isUrge ? 'Log Urge Resisted' : 'Log Smoke'}
+              </Text>
             </TouchableOpacity>
 
             <TouchableOpacity style={styles.cancelBtn} onPress={() => setModalVisible(false)}>
@@ -292,33 +325,33 @@ export default function DashboardScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: theme.colors.background },
+const createStyles = (colors) => StyleSheet.create({
+  safe: { flex: 1, backgroundColor: colors.background },
   scroll: { flex: 1 },
-  content: { padding: theme.spacing.md, paddingBottom: 32 },
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: theme.colors.background },
+  content: { padding: spacing.md, paddingBottom: 32 },
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background },
 
-  headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: theme.spacing.lg },
-  greeting: { fontSize: theme.fontSize.sm, color: theme.colors.textSecondary },
-  userName: { fontSize: theme.fontSize.xl, fontWeight: '700', color: theme.colors.text },
-  dateText: { fontSize: theme.fontSize.sm, color: theme.colors.textSecondary, marginTop: 4 },
+  headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: spacing.lg },
+  greeting: { fontSize: fontSize.sm, color: colors.textSecondary },
+  userName: { fontSize: fontSize.xl, fontWeight: '700', color: colors.text },
+  dateText: { fontSize: fontSize.sm, color: colors.textSecondary, marginTop: 4 },
 
-  statsRow: { flexDirection: 'row', gap: theme.spacing.sm, marginBottom: theme.spacing.lg },
-  statsCard: { borderRadius: theme.radius.lg, padding: theme.spacing.md, minHeight: 100, justifyContent: 'center' },
-  statsValue: { fontSize: theme.fontSize.xxxl, fontWeight: '800', color: '#fff' },
-  statsLabel: { fontSize: theme.fontSize.sm, color: 'rgba(255,255,255,0.8)', marginTop: 2 },
-  statsSubLabel: { fontSize: theme.fontSize.xs, color: 'rgba(255,255,255,0.6)', marginTop: 4 },
+  statsRow: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.lg },
+  statsCard: { borderRadius: radius.lg, padding: spacing.md, minHeight: 100, justifyContent: 'center' },
+  statsValue: { fontSize: fontSize.xxxl, fontWeight: '800', color: '#fff' },
+  statsLabel: { fontSize: fontSize.sm, color: 'rgba(255,255,255,0.8)', marginTop: 2 },
+  statsSubLabel: { fontSize: fontSize.xs, color: 'rgba(255,255,255,0.6)', marginTop: 4 },
 
   logBtn: {
-    backgroundColor: theme.colors.primary,
-    borderRadius: theme.radius.xl,
-    padding: theme.spacing.lg,
+    backgroundColor: colors.primary,
+    borderRadius: radius.xl,
+    padding: spacing.lg,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: theme.spacing.sm,
-    marginBottom: theme.spacing.xl,
-    shadowColor: theme.colors.primary,
+    gap: spacing.sm,
+    marginBottom: spacing.sm,
+    shadowColor: colors.primary,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.4,
     shadowRadius: 12,
@@ -326,102 +359,120 @@ const styles = StyleSheet.create({
     minHeight: 70,
   },
   logBtnDisabled: { opacity: 0.6 },
-  logBtnText: { fontSize: theme.fontSize.xl, fontWeight: '800', color: '#fff', letterSpacing: 0.5 },
+  logBtnText: { fontSize: fontSize.xl, fontWeight: '800', color: '#fff', letterSpacing: 0.5 },
 
-  sectionTitle: { fontSize: theme.fontSize.lg, fontWeight: '700', color: theme.colors.text, marginBottom: theme.spacing.md },
+  urgeBtn: {
+    borderRadius: radius.xl,
+    padding: spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    marginBottom: spacing.xl,
+    borderWidth: 2,
+    borderColor: colors.success,
+    backgroundColor: `${colors.success}15`,
+    minHeight: 54,
+  },
+  urgeBtnText: { fontSize: fontSize.lg, fontWeight: '700', color: colors.success },
+
+  sectionTitle: { fontSize: fontSize.lg, fontWeight: '700', color: colors.text, marginBottom: spacing.md },
 
   emptyCard: {
-    backgroundColor: theme.colors.surface,
-    borderRadius: theme.radius.lg,
-    padding: theme.spacing.xl,
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    padding: spacing.xl,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: theme.colors.border,
+    borderColor: colors.border,
     borderStyle: 'dashed',
   },
-  emptyEmoji: { fontSize: 40, marginBottom: theme.spacing.sm },
-  emptyText: { fontSize: theme.fontSize.lg, fontWeight: '600', color: theme.colors.text },
-  emptySubText: { fontSize: theme.fontSize.sm, color: theme.colors.textSecondary, marginTop: 4, textAlign: 'center' },
+  emptyEmoji: { fontSize: 40, marginBottom: spacing.sm },
+  emptyText: { fontSize: fontSize.lg, fontWeight: '600', color: colors.text },
+  emptySubText: { fontSize: fontSize.sm, color: colors.textSecondary, marginTop: 4, textAlign: 'center' },
 
   entryCard: {
-    backgroundColor: theme.colors.surface,
-    borderRadius: theme.radius.md,
-    padding: theme.spacing.md,
+    backgroundColor: colors.surface,
+    borderRadius: radius.md,
+    padding: spacing.md,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: theme.spacing.sm,
+    marginBottom: spacing.sm,
     borderLeftWidth: 3,
-    borderLeftColor: theme.colors.primary,
+    borderLeftColor: colors.primary,
   },
-  entryLeft: { flexDirection: 'row', alignItems: 'flex-start', gap: theme.spacing.md, flex: 1 },
-  entryIndex: { fontSize: theme.fontSize.xs, color: theme.colors.textMuted, width: 24, paddingTop: 2 },
-  entryTime: { fontSize: theme.fontSize.md, fontWeight: '600', color: theme.colors.text },
+  entryLeft: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.md, flex: 1 },
+  entryIndex: { fontSize: fontSize.xs, color: colors.textMuted, width: 24, paddingTop: 2 },
+  entryTime: { fontSize: fontSize.md, fontWeight: '600', color: colors.text },
   triggerBadge: {
     backgroundColor: 'rgba(255,107,53,0.15)',
-    borderRadius: theme.radius.full,
+    borderRadius: radius.full,
     paddingHorizontal: 8,
     paddingVertical: 2,
     marginTop: 4,
     alignSelf: 'flex-start',
   },
-  triggerText: { fontSize: theme.fontSize.xs, color: theme.colors.primary, fontWeight: '600' },
-  entryNote: { fontSize: theme.fontSize.xs, color: theme.colors.textSecondary, marginTop: 4, maxWidth: 220 },
-  deleteBtn: { padding: theme.spacing.sm },
+  triggerText: { fontSize: fontSize.xs, color: colors.primary, fontWeight: '600' },
+  entryNote: { fontSize: fontSize.xs, color: colors.textSecondary, marginTop: 4, maxWidth: 220 },
+  deleteBtn: { padding: spacing.sm },
 
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' },
   modalSheet: {
-    backgroundColor: theme.colors.surface,
-    borderTopLeftRadius: theme.radius.xl,
-    borderTopRightRadius: theme.radius.xl,
-    padding: theme.spacing.lg,
-    paddingBottom: Platform.OS === 'ios' ? 40 : theme.spacing.lg,
+    backgroundColor: colors.surface,
+    borderTopLeftRadius: radius.xl,
+    borderTopRightRadius: radius.xl,
+    padding: spacing.lg,
+    paddingBottom: Platform.OS === 'ios' ? 40 : spacing.lg,
   },
   modalHandle: {
     width: 40,
     height: 4,
-    backgroundColor: theme.colors.border,
+    backgroundColor: colors.border,
     borderRadius: 2,
     alignSelf: 'center',
-    marginBottom: theme.spacing.lg,
+    marginBottom: spacing.lg,
   },
-  modalTitle: { fontSize: theme.fontSize.xl, fontWeight: '700', color: theme.colors.text, marginBottom: 4 },
-  modalSubtitle: { fontSize: theme.fontSize.sm, color: theme.colors.textSecondary, marginBottom: theme.spacing.md },
-  triggerGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing.sm, marginBottom: theme.spacing.md },
+  modalTitle: { fontSize: fontSize.xl, fontWeight: '700', color: colors.text, marginBottom: 4 },
+  modalSubtitle: { fontSize: fontSize.sm, color: colors.textSecondary, marginBottom: spacing.md },
+  triggerGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginBottom: spacing.md },
   triggerChip: {
-    borderRadius: theme.radius.full,
+    borderRadius: radius.full,
     paddingHorizontal: 14,
     paddingVertical: 7,
     borderWidth: 1,
-    borderColor: theme.colors.border,
-    backgroundColor: theme.colors.surfaceHigh,
+    borderColor: colors.border,
+    backgroundColor: colors.surfaceHigh,
   },
-  triggerChipActive: { borderColor: theme.colors.primary, backgroundColor: 'rgba(255,107,53,0.15)' },
-  triggerChipText: { fontSize: theme.fontSize.sm, color: theme.colors.textSecondary },
-  triggerChipTextActive: { color: theme.colors.primary, fontWeight: '600' },
+  triggerChipActive: { borderColor: colors.primary, backgroundColor: 'rgba(255,107,53,0.15)' },
+  triggerChipUrge: { borderColor: colors.success, backgroundColor: 'rgba(76,175,80,0.15)' },
+  triggerChipText: { fontSize: fontSize.sm, color: colors.textSecondary },
+  triggerChipTextActive: { color: colors.primary, fontWeight: '600' },
+  triggerChipTextUrge: { color: colors.success, fontWeight: '600' },
   noteInput: {
-    backgroundColor: theme.colors.surfaceHigh,
-    borderRadius: theme.radius.md,
-    padding: theme.spacing.md,
-    color: theme.colors.text,
-    fontSize: theme.fontSize.md,
+    backgroundColor: colors.surfaceHigh,
+    borderRadius: radius.md,
+    padding: spacing.md,
+    color: colors.text,
+    fontSize: fontSize.md,
     minHeight: 80,
     textAlignVertical: 'top',
-    marginBottom: theme.spacing.md,
+    marginBottom: spacing.md,
     borderWidth: 1,
-    borderColor: theme.colors.border,
+    borderColor: colors.border,
   },
   modalLogBtn: {
-    backgroundColor: theme.colors.primary,
-    borderRadius: theme.radius.md,
-    padding: theme.spacing.md,
+    backgroundColor: colors.primary,
+    borderRadius: radius.md,
+    padding: spacing.md,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: theme.spacing.sm,
-    marginBottom: theme.spacing.sm,
+    gap: spacing.sm,
+    marginBottom: spacing.sm,
   },
-  modalLogBtnText: { color: '#fff', fontSize: theme.fontSize.lg, fontWeight: '700' },
-  cancelBtn: { padding: theme.spacing.md, alignItems: 'center' },
-  cancelText: { color: theme.colors.textSecondary, fontSize: theme.fontSize.md },
+  modalLogBtnUrge: { backgroundColor: colors.success },
+  modalLogBtnText: { color: '#fff', fontSize: fontSize.lg, fontWeight: '700' },
+  cancelBtn: { padding: spacing.md, alignItems: 'center' },
+  cancelText: { color: colors.textSecondary, fontSize: fontSize.md },
 });

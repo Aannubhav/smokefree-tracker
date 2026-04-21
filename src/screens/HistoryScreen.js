@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -14,11 +14,15 @@ import { format, parseISO, isToday, isYesterday } from 'date-fns';
 import { useFocusEffect } from '@react-navigation/native';
 
 import { useAuth } from '../context/AuthContext';
-import { theme } from '../theme';
+import { useTheme } from '../context/ThemeContext';
+import { spacing, radius, fontSize } from '../theme';
 import { getRecentSummaries, getSmokesForDate, getSettings } from '../services/smokingService';
 
 export default function HistoryScreen() {
   const { user } = useAuth();
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   const [summaries, setSummaries] = useState([]);
   const [expanded, setExpanded] = useState(null);
   const [expandedSmokes, setExpandedSmokes] = useState([]);
@@ -75,7 +79,7 @@ export default function HistoryScreen() {
   if (loading) {
     return (
       <View style={styles.center}>
-        <ActivityIndicator size="large" color={theme.colors.primary} />
+        <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
   }
@@ -89,7 +93,7 @@ export default function HistoryScreen() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={() => { setRefreshing(true); load(); }}
-            tintColor={theme.colors.primary}
+            tintColor={colors.primary}
           />
         }
       >
@@ -116,7 +120,7 @@ export default function HistoryScreen() {
                 </View>
                 <View style={styles.dayRight}>
                   <View style={styles.countBadge}>
-                    <Ionicons name="flame" size={12} color={theme.colors.primary} />
+                    <Ionicons name="flame" size={12} color={colors.primary} />
                     <Text style={styles.countText}>{s.count}</Text>
                   </View>
                   <Text style={styles.expenseText}>
@@ -125,7 +129,7 @@ export default function HistoryScreen() {
                   <Ionicons
                     name={expanded === s.date ? 'chevron-up' : 'chevron-down'}
                     size={16}
-                    color={theme.colors.textMuted}
+                    color={colors.textMuted}
                   />
                 </View>
               </TouchableOpacity>
@@ -133,11 +137,11 @@ export default function HistoryScreen() {
               {expanded === s.date && (
                 <View style={styles.expandedPanel}>
                   {loadingExpand ? (
-                    <ActivityIndicator size="small" color={theme.colors.primary} />
+                    <ActivityIndicator size="small" color={colors.primary} />
                   ) : expandedSmokes.length === 0 ? (
                     <Text style={styles.noEntries}>No entries found.</Text>
                   ) : (
-                    expandedSmokes.map((smoke, idx) => {
+                    expandedSmokes.map((smoke) => {
                       const ts = smoke.timestamp?.toDate
                         ? smoke.timestamp.toDate()
                         : new Date(smoke.timestamp);
@@ -169,73 +173,73 @@ export default function HistoryScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: theme.colors.background },
+const createStyles = (colors) => StyleSheet.create({
+  safe: { flex: 1, backgroundColor: colors.background },
   scroll: { flex: 1 },
-  content: { padding: theme.spacing.md, paddingBottom: 32 },
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: theme.colors.background },
+  content: { padding: spacing.md, paddingBottom: 32 },
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background },
 
-  title: { fontSize: theme.fontSize.xxl, fontWeight: '700', color: theme.colors.text },
-  subtitle: { fontSize: theme.fontSize.sm, color: theme.colors.textSecondary, marginBottom: theme.spacing.lg },
+  title: { fontSize: fontSize.xxl, fontWeight: '700', color: colors.text },
+  subtitle: { fontSize: fontSize.sm, color: colors.textSecondary, marginBottom: spacing.lg },
 
   empty: { alignItems: 'center', paddingTop: 60 },
-  emptyEmoji: { fontSize: 48, marginBottom: theme.spacing.md },
-  emptyText: { fontSize: theme.fontSize.lg, color: theme.colors.text, fontWeight: '600' },
-  emptySubText: { fontSize: theme.fontSize.sm, color: theme.colors.textSecondary, marginTop: 4 },
+  emptyEmoji: { fontSize: 48, marginBottom: spacing.md },
+  emptyText: { fontSize: fontSize.lg, color: colors.text, fontWeight: '600' },
+  emptySubText: { fontSize: fontSize.sm, color: colors.textSecondary, marginTop: 4 },
 
   dayCard: {
-    backgroundColor: theme.colors.surface,
-    borderRadius: theme.radius.md,
-    padding: theme.spacing.md,
+    backgroundColor: colors.surface,
+    borderRadius: radius.md,
+    padding: spacing.md,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: 2,
     borderWidth: 1,
-    borderColor: theme.colors.border,
+    borderColor: colors.border,
   },
-  dayCardExpanded: { borderColor: theme.colors.primary, borderBottomLeftRadius: 0, borderBottomRightRadius: 0 },
+  dayCardExpanded: { borderColor: colors.primary, borderBottomLeftRadius: 0, borderBottomRightRadius: 0 },
 
   dayLeft: {},
-  dayLabel: { fontSize: theme.fontSize.md, fontWeight: '600', color: theme.colors.text },
-  dayDateFull: { fontSize: theme.fontSize.xs, color: theme.colors.textMuted, marginTop: 2 },
+  dayLabel: { fontSize: fontSize.md, fontWeight: '600', color: colors.text },
+  dayDateFull: { fontSize: fontSize.xs, color: colors.textMuted, marginTop: 2 },
 
-  dayRight: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md },
+  dayRight: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   countBadge: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  countText: { fontSize: theme.fontSize.md, fontWeight: '700', color: theme.colors.primary },
-  expenseText: { fontSize: theme.fontSize.sm, color: theme.colors.textSecondary },
+  countText: { fontSize: fontSize.md, fontWeight: '700', color: colors.primary },
+  expenseText: { fontSize: fontSize.sm, color: colors.textSecondary },
 
   expandedPanel: {
-    backgroundColor: theme.colors.surfaceHigh,
+    backgroundColor: colors.surfaceHigh,
     borderWidth: 1,
     borderTopWidth: 0,
-    borderColor: theme.colors.primary,
-    borderBottomLeftRadius: theme.radius.md,
-    borderBottomRightRadius: theme.radius.md,
-    padding: theme.spacing.md,
-    marginBottom: theme.spacing.sm,
+    borderColor: colors.primary,
+    borderBottomLeftRadius: radius.md,
+    borderBottomRightRadius: radius.md,
+    padding: spacing.md,
+    marginBottom: spacing.sm,
   },
-  noEntries: { color: theme.colors.textMuted, fontSize: theme.fontSize.sm },
+  noEntries: { color: colors.textMuted, fontSize: fontSize.sm },
 
-  smokeEntry: { flexDirection: 'row', alignItems: 'flex-start', gap: theme.spacing.md, marginBottom: 12 },
+  smokeEntry: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.md, marginBottom: 12 },
   timelineDot: {
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: theme.colors.primary,
+    backgroundColor: colors.primary,
     marginTop: 5,
     flexShrink: 0,
   },
   entryBody: { flex: 1 },
-  entryTime: { fontSize: theme.fontSize.md, fontWeight: '600', color: theme.colors.text },
+  entryTime: { fontSize: fontSize.md, fontWeight: '600', color: colors.text },
   triggerBadge: {
     backgroundColor: 'rgba(255,107,53,0.15)',
-    borderRadius: theme.radius.full,
+    borderRadius: radius.full,
     paddingHorizontal: 8,
     paddingVertical: 2,
     marginTop: 4,
     alignSelf: 'flex-start',
   },
-  triggerText: { fontSize: theme.fontSize.xs, color: theme.colors.primary, fontWeight: '600' },
-  entryNote: { fontSize: theme.fontSize.xs, color: theme.colors.textSecondary, marginTop: 4 },
+  triggerText: { fontSize: fontSize.xs, color: colors.primary, fontWeight: '600' },
+  entryNote: { fontSize: fontSize.xs, color: colors.textSecondary, marginTop: 4 },
 });
