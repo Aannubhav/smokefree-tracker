@@ -13,6 +13,38 @@ import StatBlock from '../components/ui/StatBlock';
 import Button from '../components/ui/Button';
 import { logSmoke, logUrge, deleteSmoke, getTodaySmokes, getTodaySummary, getSettings } from '../services/smokingService';
 
+const FALLBACK_QUOTES = [
+  { q: 'Every cigarette you don\'t smoke is a victory.', a: 'Unknown' },
+  { q: 'Your health is your greatest wealth.', a: 'Unknown' },
+  { q: 'One day at a time. One breath at a time.', a: 'Unknown' },
+  { q: 'The secret of getting ahead is getting started.', a: 'Mark Twain' },
+  { q: 'Believe you can and you\'re halfway there.', a: 'Theodore Roosevelt' },
+];
+
+const cache = { quote: null };
+
+function useMotivationalQuote() {
+  const [quote, setQuote] = useState(cache.quote);
+
+  useEffect(() => {
+    if (cache.quote) return;
+    fetch('https://zenquotes.io/api/random')
+      .then((r) => r.json())
+      .then(([data]) => {
+        const q = { q: data.q, a: data.a };
+        cache.quote = q;
+        setQuote(q);
+      })
+      .catch(() => {
+        const fallback = FALLBACK_QUOTES[Math.floor(Math.random() * FALLBACK_QUOTES.length)];
+        cache.quote = fallback;
+        setQuote(fallback);
+      });
+  }, []);
+
+  return quote;
+}
+
 const TRIGGERS = ['Stress', 'Boredom', 'After eating', 'Coffee', 'Social', 'Anxiety', 'Habit', 'Other'];
 
 const greeting = () => {
@@ -22,6 +54,7 @@ const greeting = () => {
 
 export default function DashboardScreen() {
   const { user } = useAuth();
+  const quote = useMotivationalQuote();
   const [summary, setSummary] = useState({ count: 0, totalExpense: 0 });
   const [smokes, setSmokes] = useState([]);
   const [settings, setSettings] = useState(null);
@@ -130,6 +163,17 @@ export default function DashboardScreen() {
             <Text style={s.dateText}>{format(new Date(), 'EEE, MMM d')}</Text>
           </View>
         </View>
+
+        {/* Quote */}
+        {quote && (
+          <View style={s.quoteCard}>
+            <Ionicons name="chatbubble-ellipses-outline" size={14} color={colors.primary} style={{ marginTop: 1 }} />
+            <View style={{ flex: 1 }}>
+              <Text style={s.quoteText}>"{quote.q}"</Text>
+              <Text style={s.quoteAuthor}>— {quote.a}</Text>
+            </View>
+          </View>
+        )}
 
         {/* Stats */}
         <Card style={s.statsCard} padding={false}>
@@ -295,6 +339,10 @@ const s = StyleSheet.create({
   name: { fontSize: fontSize.xl, fontWeight: '800', color: colors.text },
   datePill: { backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border, borderRadius: radius.full, paddingHorizontal: 12, paddingVertical: 5 },
   dateText: { fontSize: fontSize.xs, color: colors.textSecondary, fontWeight: '500' },
+
+  quoteCard: { flexDirection: 'row', gap: 8, backgroundColor: colors.primaryLight, borderRadius: radius.md, padding: spacing.sm, alignItems: 'flex-start' },
+  quoteText: { fontSize: fontSize.xs, color: colors.text, lineHeight: 18, fontStyle: 'italic' },
+  quoteAuthor: { fontSize: fontSize.xs, color: colors.primary, fontWeight: '600', marginTop: 4 },
 
   statsCard: { overflow: 'hidden' },
   statsRow: { flexDirection: 'row' },
