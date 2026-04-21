@@ -1,5 +1,6 @@
-import 'react-native-gesture-handler';
 import React from 'react';
+import { Platform } from 'react-native';
+if (Platform.OS !== 'web') require('react-native-gesture-handler');
 import { StatusBar } from 'expo-status-bar';
 import { AuthProvider } from './src/context/AuthContext';
 import { ThemeProvider, useTheme } from './src/context/ThemeContext';
