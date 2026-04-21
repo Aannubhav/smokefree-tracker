@@ -11,13 +11,13 @@
       "distribution": "internal",
       "android": {
         "buildType": "apk",
-        "image": "sdk-51"
+        "image": "sdk-52"
       }
     },
     "production": {
       "autoIncrement": true,
       "android": {
-        "image": "sdk-51"
+        "image": "sdk-52"
       }
     }
   },
