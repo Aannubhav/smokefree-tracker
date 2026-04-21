@@ -113,26 +113,29 @@ export const deleteSmoke = async (userId, smokeId, dateStr) => {
 
 export const getTodaySmokes = async (userId) => {
   const today = format(new Date(), 'yyyy-MM-dd');
-  const q = query(
-    smokesCol(userId),
-    where('date', '==', today),
-    orderBy('timestamp', 'desc')
-  );
+  // No orderBy here — composite index not deployed; sort client-side instead
+  const q = query(smokesCol(userId), where('date', '==', today));
   const snap = await getDocs(q);
-  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  const docs = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  return docs.sort((a, b) => {
+    const ta = a.timestamp?.toDate ? a.timestamp.toDate() : new Date(a.timestamp);
+    const tb = b.timestamp?.toDate ? b.timestamp.toDate() : new Date(b.timestamp);
+    return tb - ta;
+  });
 };
 
 // ─── Fetch today's urges ─────────────────────────────────────────────────────
 
 export const getTodayUrges = async (userId) => {
   const today = format(new Date(), 'yyyy-MM-dd');
-  const q = query(
-    urgesCol(userId),
-    where('date', '==', today),
-    orderBy('timestamp', 'desc')
-  );
+  const q = query(urgesCol(userId), where('date', '==', today));
   const snap = await getDocs(q);
-  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  const docs = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  return docs.sort((a, b) => {
+    const ta = a.timestamp?.toDate ? a.timestamp.toDate() : new Date(a.timestamp);
+    const tb = b.timestamp?.toDate ? b.timestamp.toDate() : new Date(b.timestamp);
+    return tb - ta;
+  });
 };
 
 // ─── Fetch today summary ─────────────────────────────────────────────────────
@@ -163,13 +166,14 @@ export const getRecentSummaries = async (userId, days = 30) => {
 // ─── Fetch smokes for a specific date ────────────────────────────────────────
 
 export const getSmokesForDate = async (userId, dateStr) => {
-  const q = query(
-    smokesCol(userId),
-    where('date', '==', dateStr),
-    orderBy('timestamp', 'asc')
-  );
+  const q = query(smokesCol(userId), where('date', '==', dateStr));
   const snap = await getDocs(q);
-  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  const docs = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  return docs.sort((a, b) => {
+    const ta = a.timestamp?.toDate ? a.timestamp.toDate() : new Date(a.timestamp);
+    const tb = b.timestamp?.toDate ? b.timestamp.toDate() : new Date(b.timestamp);
+    return ta - tb;
+  });
 };
 
 // ─── Urge counts for last N days ─────────────────────────────────────────────
