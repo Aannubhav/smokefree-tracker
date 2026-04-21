@@ -27,6 +27,11 @@ jobs:
       - name: Install dependencies
         run: npm install
 
+      - name: Link EAS project
+        run: eas init --id c52a29d8-7e98-44b6-99f7-6115ca667f94 --non-interactive
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+
       - name: Build Android APK
         run: eas build --platform android --profile preview --non-interactive
         env:
